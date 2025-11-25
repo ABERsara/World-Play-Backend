@@ -1,6 +1,25 @@
-version: '3.8'
 
 services:
+  # ---  (Backend Application) ---
+  app:
+    build: .
+    container_name: world_play_app_backend
+    
+    ports:
+      - "${PORT}:${PORT}" 
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - PORT=${PORT}
+      # more environment variables can be added here
+      - NODE_ENV=development
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - db 
+
+  # --- DB ---
   db:
     image: postgres:15-alpine
     container_name: world_play_app_db

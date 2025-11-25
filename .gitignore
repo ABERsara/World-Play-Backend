@@ -1,27 +1,40 @@
-.package-lock.json
-/package-lock.json
-package-lock.json
-# Node
+# Dependencies
 node_modules/
-# Env files
+
+# Environment Variables & Secrets (CRITICAL)
 .env
 .env.local
-.env.production
 .env.development
+.env.test
+.env.production
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-# Prisma
-prisma/dev.db
-prisma/generated/
-# Build output
+
+# Build Output
 dist/
 build/
-# System files
+coverage/
+
+# Prisma
+# Ignore generated client (it's built on install)
+prisma/generated/
+# Ignore SQLite files if used locally
+prisma/dev.db
+*.db
+*.db-journal
+
+# Docker Volumes (Prevents committing the DB data itself)
+postgres_data/
+
+# System Files
 .DS_Store
 Thumbs.db
-# VSCode (optional)
+
+# IDE / Editor Settings
 .vscode/
+.idea/

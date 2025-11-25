@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 require('dotenv').config();
 
 
-const corsOptions = require('./config/corsOptions');
+const corsOptions = require('../config/corsOptions');
 
 const app = express();
 const server = http.createServer(app);
@@ -47,4 +47,3 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
-
