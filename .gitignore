@@ -23,6 +23,7 @@ coverage/
 # Prisma
 # Ignore generated client (it's built on install)
 prisma/generated/
+generated/
 # Ignore SQLite files if used locally
 prisma/dev.db
 *.db
@@ -38,3 +39,4 @@ Thumbs.db
 # IDE / Editor Settings
 .vscode/
 .idea/
+
