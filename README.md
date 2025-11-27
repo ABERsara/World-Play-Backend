@@ -5,6 +5,11 @@ Node.js backend for an interactive live-streaming trivia platform featuring real
 ## Docker
 
 ## Prisma
+npx prisma studio- אפשרות לראות את השרת בניתוב - בעצם כמו שפתחנו את המונגו DB 
+
+npx prisma migrate dev --name init_user_table - ליצירת טבלאות בשביל שבעצם הם יוצרות גם בSQL והיה אפשר להשמש במודלים שכתבנו הPRISMA
+ 
+
 
 ## Code Quality and Standards:
 
