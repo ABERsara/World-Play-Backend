@@ -16,19 +16,28 @@ Prerequisites
 
 .env example
 // filepath: c:\World-Play-Backend\.env.example
+
 POSTGRES_USER=postgres
+
 POSTGRES_PASSWORD=postgres
+
 POSTGRES_DB=world_play_db
+
 PORT=3000
 
 Common Docker commands (PowerShell):
 
 1.Build and run in background: docker-compose up --build -d
+
 2.Watch backend logs: docker-compose logs world_play_app_backend
+
 3.Open a shell in the running app container: docker-compose exec app sh
+
 4.Run prisma generate inside the running container: docker-compose exec app sh -c "npx prisma generate"
+
 5.Stop and remove containers and volumes (destroys DB data):
 docker-compose down -v
+
 6.Rebuild images and start fresh:docker-compose down --rmi all --volumes
 docker-compose up --build -d
 
