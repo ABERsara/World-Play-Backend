@@ -1,12 +1,18 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.middleware.js';
-import userController from '../controller/user.controller.js';
+// תיקון: כאן אנחנו קוראים לקובץ המשתמשים בשם userController
+import * as userController from '../controller/user.controller.js'; 
+// וכאן לקובץ האימות בשם authController
+import * as authController from '../controller/auth.controller.js';
 
 const router = express.Router();
 
-router.post('/register', userController.register);
-router.post('/login', userController.login);
+// נתיבי אימות (משתמשים ב-authController)
+router.post('/register', authController.register);
+router.post('/login', authController.login);
 
-router.get('/profile', authenticateToken, userController.getProfile);
+// נתיבי משתמשים מוגנים (משתמשים ב-userController)
+router.get('/profile', authenticateToken, userController.getMe);
+router.put('/profile', authenticateToken, userController.updateMe);
 
 export default router;

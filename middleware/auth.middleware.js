@@ -1,41 +1,40 @@
 import jwt from 'jsonwebtoken';
 
-const getSecret = () => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    console.error(
-      'CONFIGURATION ERROR: JWT_SECRET is not defined in the environment.'
-    );
-    throw new Error('Missing JWT Secret');
-  }
-  return secret;
-};
-
 export const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  // תיקון קריטי: שליפת הסוד בתוך הפונקציה
+  // זה מבטיח שהמשתנה נטען נכון גם אם קובץ ה-env נטען באיחור
+  const JWT_SECRET = process.env.JWT_SECRET;
 
-  if (token == null) {
-    return res.status(401).json({ error: 'נדרשת אימות (טוקן חסר).' });
+  const authHeader = req.headers['authorization'];
+  
+  console.log('------------------------------------------------');
+  console.log('🔍 Debug Auth:');
+  console.log('🔑 Secret active:', JWT_SECRET ? 'Yes (Exists)' : 'No (Undefined)'); 
+  console.log('1. Header:', authHeader);
+
+  if (!authHeader) {
+    console.log('❌ No Header');
+    return res.status(401).json({ message: 'גישה נדחתה: לא סופק טוקן' });
+  }
+
+  // חילוץ הטוקן (הסרת המילה Bearer)
+  const token = authHeader.split(' ')[1]; 
+
+  if (!token) {
+    console.log('❌ Token Format Wrong');
+    return res.status(401).json({ message: 'מבנה טוקן לא תקין' });
   }
 
   try {
-    const secret = getSecret();
-
-    jwt.verify(token, secret, (err, userPayload) => {
-      if (err) {
-        return res
-          .status(403)
-          .json({ error: 'טוקן אימות לא חוקי או פג תוקף.' });
-      }
-
-      req.user = userPayload;
-      next();
-    });
+    // האימות בפועל
+    const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('✅ Verify Success!');
+    
+    // הוספת פרטי המשתמש לבקשה
+    req.user = decoded;
+    next(); 
   } catch (error) {
-    console.error('JWT Verification Error:', error.message);
-    return res
-      .status(500)
-      .json({ error: 'Configuration Error: Server is missing JWT Secret.' });
+    console.log('❌ Verify Failed:', error.message);
+    return res.status(403).json({ message: 'טוקן לא תקף או פג תוקף' });
   }
 };
