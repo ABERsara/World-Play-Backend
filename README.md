@@ -4,18 +4,7 @@ Node.js backend for an interactive live-streaming trivia platform featuring real
 
 # Docker
 
-<<<<<<< HEAD
-
-## Prisma
-
-npx prisma studio- אפשרות לראות את השרת בניתוב - בעצם כמו שפתחנו את המונגו DB
-
-npx prisma migrate dev --name init_user_table - ליצירת טבלאות בשביל שבעצם הם יוצרות גם בSQL והיה אפשר להשמש במודלים שכתבנו הPRISMA
-
-=======
 This repo includes a docker-compose setup with two services:
-
-> > > > > > > main
 
 - app — your Node.js backend (built from the Dockerfile)
 - db — PostgreSQL 15 with persistent volume `postgres_data`
@@ -62,6 +51,10 @@ The bind mount - .:/usr/src/app in docker-compose will override files that were 
 Prisma requires environment variable DATABASE_URL. When running migrations or generating client inside containers, the .env must be present in the container or DATABASE_URL provided via docker-compose environment.
 
 # Prisma
+
+npx prisma studio- אפשרות לראות את השרת בניתוב - בעצם כמו שפתחנו את המונגו DB
+
+npx prisma migrate dev --name init_user_table - ליצירת טבלאות בשביל שבעצם הם יוצרות גם בSQL והיה אפשר להשמש במודלים שכתבנו הPRISMA
 
 Generate client:
 
