@@ -64,6 +64,12 @@ enum NotificationType {
   REWARD
 }
 
+enum QuestionRewardType {
+  STANDARD
+  WINNER_TAKES_ALL
+}
+
+
 // --- TABLES ---
 
 // 1. User Table
@@ -184,11 +190,14 @@ model GameParticipant {
 
 // 6. Question Table
 model Question {
-  id           String   @id @default(uuid())
-  gameId       String   @map("game_id") 
-  questionText String   @map("question_text")
-  options      Json     @map("options") 
-  createdAt    DateTime @default(now()) @map("created_at")
+  id           String             @id @default(uuid())
+  gameId       String             @map("game_id") 
+  questionText String             @map("question_text")
+  options      Json               @map("options") 
+  
+  rewardType   QuestionRewardType @default(STANDARD) @map("reward_type")
+  
+  createdAt    DateTime           @default(now()) @map("created_at")
 
   game Game @relation(fields: [gameId], references: [id])
   
