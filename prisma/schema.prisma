@@ -38,6 +38,8 @@ enum TransactionType {
   EARN
   SPEND
   TRANSFER
+  GIFT     // New: For drag & drop gifts
+  REFUND   // New: For returning wagers to winners
 }
 
 enum TransactionStatus {
@@ -68,7 +70,6 @@ enum QuestionRewardType {
   STANDARD
   WINNER_TAKES_ALL
 }
-
 
 // --- TABLES ---
 
@@ -110,6 +111,7 @@ model User {
   
   sentMessages     ChatMessage[] @relation("Sender")
   receivedMessages ChatMessage[] @relation("Receiver")
+  userAnswers      UserAnswer[]
 
   @@map("users")
 }
@@ -118,11 +120,11 @@ model User {
 model CreditCard {
   id          String   @id @default(uuid())
   userId      String   @map("user_id")
-  last4Digits String   @map("last_4_digits") // MaxLength(4)
+  last4Digits String   @map("last_4_digits") 
   token       String   // Payment provider token
-  cvv         String?  // PCI compliance dependent
+  cvv         String?  
   expDate     String   @map("exp_date") // MM/YY
-  tz          String?  // ID Number
+  tz          String?  
   isDeleted   Boolean  @default(false) @map("is_deleted")
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -188,23 +190,60 @@ model GameParticipant {
   @@map("game_participants")
 }
 
-// 6. Question Table
+// 6. Question Table (Normalized)
 model Question {
   id           String             @id @default(uuid())
   gameId       String             @map("game_id") 
   questionText String             @map("question_text")
-  options      Json               @map("options") 
   
   rewardType   QuestionRewardType @default(STANDARD) @map("reward_type")
+  isResolved   Boolean            @default(false) @map("is_resolved")
   
   createdAt    DateTime           @default(now()) @map("created_at")
 
-  game Game @relation(fields: [gameId], references: [id])
-  
+  game    Game             @relation(fields: [gameId], references: [id])
+  options QuestionOption[] 
+  answers UserAnswer[]     
+
   @@map("questions")
 }
 
-// 7. User Points Table
+// 7. Question Options Table (New)
+model QuestionOption {
+  id             String  @id @default(uuid())
+  questionId     String  @map("question_id")
+  text           String  @map("text")
+  isCorrect      Boolean @default(false) @map("is_correct")
+  
+  // Optional: Link option to a specific player (for 'Who will win' questions)
+  linkedPlayerId String? @map("linked_player_id") 
+
+  question       Question     @relation(fields: [questionId], references: [id])
+  chosenByUsers  UserAnswer[] 
+
+  @@map("question_options")
+}
+
+// 8. User Answer Table (Updated with Wager)
+model UserAnswer {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  questionId       String   @map("question_id")
+  
+  selectedOptionId String   @map("selected_option_id")
+  wager            Int      @default(0) // Amount of points bet
+  
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user     User           @relation(fields: [userId], references: [id])
+  question Question     @relation(fields: [questionId], references: [id])
+  option   QuestionOption @relation(fields: [selectedOptionId], references: [id])
+
+  @@index([questionId, userId])
+  @@map("user_answers")
+}
+
+// 9. User Points Table
 model UserPoint {
   id            String    @id @default(uuid())
   userId        String    @map("user_id")
@@ -223,7 +262,7 @@ model UserPoint {
   @@map("user_points")
 }
 
-// 8. Transaction Table
+// 10. Transaction Table
 model Transaction {
   id            String            @id @default(uuid())
   userId        String            @map("user_id")
@@ -242,7 +281,7 @@ model Transaction {
   @@map("transactions")
 }
 
-// 9. Chat Message Table
+// 11. Chat Message Table
 model ChatMessage {
   id          String        @id @default(uuid())
   senderId    String        @map("sender_id")
@@ -258,7 +297,7 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
-// 10. Notification Table
+// 12. Notification Table
 model Notification {
   id        String           @id @default(uuid())
   userId    String           @map("user_id")
@@ -273,7 +312,7 @@ model Notification {
   @@map("notifications")
 }
 
-// 11. ViewLog Table (Analytics)
+// 13. ViewLog Table (Analytics)
 model ViewLog {
   id                   String   @id @default(uuid())
   userId               String   @map("user_id")
