@@ -1,9 +1,3 @@
-/*
-  Warnings:
-
-  - You are about to drop the `User` table. If the table is not empty, all the data it contains will be lost.
-
-*/
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('HOST', 'PLAYER', 'MODERATOR', 'VIEWER');
 
@@ -30,9 +24,6 @@ CREATE TYPE "NotificationType" AS ENUM ('SYSTEM', 'GAME_INVITE', 'REWARD');
 
 -- CreateEnum
 CREATE TYPE "QuestionRewardType" AS ENUM ('STANDARD', 'WINNER_TAKES_ALL');
-
--- DropTable
-DROP TABLE "User";
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -77,6 +68,7 @@ CREATE TABLE "streams" (
     "start_time" TIMESTAMP(3),
     "end_time" TIMESTAMP(3),
     "status" "StreamStatus" NOT NULL DEFAULT 'WAITING',
+    "last_paused_at" TIMESTAMP(3),
 
     CONSTRAINT "streams_pkey" PRIMARY KEY ("id")
 );

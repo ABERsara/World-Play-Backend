@@ -141,7 +141,7 @@ model Stream {
   startTime DateTime?    @map("start_time")
   endTime   DateTime?    @map("end_time")
   status    StreamStatus @default(WAITING)
-
+lastPausedAt DateTime?    @map("last_paused_at")
   host      User         @relation("HostStreams", fields: [hostId], references: [id])
   games     Game[]
   
