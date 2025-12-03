@@ -18,8 +18,8 @@ export const getMe = async (req, res) => {
         firebaseId: true,
         isActive: true,
         createdAt: true,
-        points: true
-      }
+        points: true,
+      },
     });
 
     if (!user) {
@@ -27,7 +27,6 @@ export const getMe = async (req, res) => {
     }
 
     res.json(user);
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'שגיאה בשליפת פרטי משתמש' });
@@ -45,21 +44,22 @@ export const updateMe = async (req, res) => {
       where: { id: userId },
       data: {
         phoneNumber: phoneNumber || undefined,
-        firebaseId: firebaseId || undefined
+        firebaseId: firebaseId || undefined,
       },
       select: {
         id: true,
         username: true,
         phoneNumber: true,
-        firebaseId: true
-      }
+        firebaseId: true,
+      },
     });
 
     res.json({ message: 'הפרטים עודכנו בהצלחה', user: updatedUser });
-
   } catch (error) {
     if (error.code === 'P2002' && error.meta?.target?.includes('phoneNumber')) {
-      return res.status(400).json({ message: 'מספר הטלפון כבר קיים במערכת למשתמש אחר' });
+      return res
+        .status(400)
+        .json({ message: 'מספר הטלפון כבר קיים במערכת למשתמש אחר' });
     }
     console.error(error);
     res.status(500).json({ message: 'שגיאה בעדכון פרטים' });

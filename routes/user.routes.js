@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 // תיקון: כאן אנחנו קוראים לקובץ המשתמשים בשם userController
-import * as userController from '../controller/user.controller.js'; 
+import * as userController from '../controller/user.controller.js';
 // וכאן לקובץ האימות בשם authController
 import * as authController from '../controller/auth.controller.js';
 

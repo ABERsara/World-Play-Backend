@@ -12,7 +12,9 @@ export const register = async (req, res) => {
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      return res.status(400).json({ message: 'כתובת האימייל כבר קיימת במערכת' });
+      return res
+        .status(400)
+        .json({ message: 'כתובת האימייל כבר קיימת במערכת' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -24,7 +26,7 @@ export const register = async (req, res) => {
         email,
         password: hashedPassword,
         role: 'VIEWER',
-        isActive: true
+        isActive: true,
       },
     });
 
@@ -34,12 +36,15 @@ export const register = async (req, res) => {
       { expiresIn: '5m' }
     );
 
-    res.status(201).json({ 
-      message: 'ההרשמה בוצעה בהצלחה', 
-      token, 
-      user: { id: newUser.id, username: newUser.username, email: newUser.email } 
+    res.status(201).json({
+      message: 'ההרשמה בוצעה בהצלחה',
+      token,
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+      },
     });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'שגיאת שרת בעת ההרשמה' });
@@ -57,7 +62,9 @@ export const login = async (req, res) => {
     }
 
     if (!user.isActive) {
-      return res.status(403).json({ message: 'החשבון שלך חסום או לא פעיל. אנא צור קשר עם התמיכה.' });
+      return res.status(403).json({
+        message: 'החשבון שלך חסום או לא פעיל. אנא צור קשר עם התמיכה.',
+      });
     }
 
     if (user.password) {
@@ -66,12 +73,14 @@ export const login = async (req, res) => {
         return res.status(400).json({ message: 'אימייל או סיסמה שגויים' });
       }
     } else {
-        return res.status(400).json({ message: 'אנא התחבר באמצעות חשבון Google/Facebook' });
+      return res
+        .status(400)
+        .json({ message: 'אנא התחבר באמצעות חשבון Google/Facebook' });
     }
 
     await prisma.user.update({
-        where: { id: user.id },
-        data: { lastActiveAt: new Date() }
+      where: { id: user.id },
+      data: { lastActiveAt: new Date() },
     });
 
     const token = jwt.sign(
@@ -80,12 +89,11 @@ export const login = async (req, res) => {
       { expiresIn: '5m' }
     );
 
-    res.json({ 
-      message: 'התחברות מוצלחת', 
+    res.json({
+      message: 'התחברות מוצלחת',
       token,
-      user: { id: user.id, username: user.username, role: user.role }
+      user: { id: user.id, username: user.username, role: user.role },
     });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'שגיאת שרת בעת ההתחברות' });
