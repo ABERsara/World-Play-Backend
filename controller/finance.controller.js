@@ -8,11 +8,9 @@ const financeController = {
       const { token, last4Digits, expDate, cvv, tz } = req.body;
 
       if (!token || !last4Digits || !expDate) {
-        return res
-          .status(400)
-          .json({
-            error: 'חסרים פרטי כרטיס חובה (token, last4Digits, expDate)',
-          });
+        return res.status(400).json({
+          error: 'חסרים פרטי כרטיס חובה (token, last4Digits, expDate)',
+        });
       }
 
       const card = await financeService.saveCreditCard(userId, {
