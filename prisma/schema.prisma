@@ -102,8 +102,9 @@ model User {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  followedBy     User[]    @relation("UserFollows")
-  following      User[]    @relation("UserFollows")
+  followedBy      Follow[]  @relation("followedBy") 
+  following       Follow[]  @relation("following")
+  hostLogs ViewLog[] @relation("HostLogs")
   
   creditCards    CreditCard[] 
   hostedStreams  Stream[]  @relation("HostStreams")
@@ -319,19 +320,38 @@ model Notification {
   @@map("notifications")
 }
 
-// 13. ViewLog Table (Analytics)
+// 13. ViewLog Table (Analytics & Interest Signal)
 model ViewLog {
-  id                   String   @id @default(uuid())
-  userId               String   @map("user_id")
-  gameId               String   @map("game_id")
-  duration             Int      
-  answersCount         Int      @map("answers_count")
-  participationPercent Float    @map("participation_percent")
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                    String    @id @default(uuid())
+  userId                String    @map("user_id")      // The viewer
+  gameId                String    @map("game_id")      // The specific game
+  hostId                String    @map("host_id")      // <--- Adding this field is critical for the feed
+  
+  duration              Int       // Seconds
+  answersCount          Int       @map("answers_count")
+  participationPercent  Float     @map("participation_percent")
+  
+  createdAt             DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id])
   game Game @relation(fields: [gameId], references: [id])
+  host User @relation("HostLogs", fields: [hostId], references: [id]) // Relation to the creator
 
-  @@index([userId, createdAt])
+  // Smart index: allows fast retrieval by user + duration + host
+  @@index([userId, hostId, duration]) 
   @@map("view_logs")
+}
+
+// 14. Follow Table 
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower    User     @relation("following", fields: [followerId], references: [id])
+  following   User     @relation("followedBy", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId]) 
+  @@map("follows")
 }

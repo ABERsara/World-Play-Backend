@@ -1,19 +1,12 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import * as feedService from '../services/feed.service.js';
 
-
-// פונקציה לשליפת הפיד (משחקים בשידור חי בלבד)
 export const getLiveFeed = async (req, res) => {
   try {
-    const liveStreams = await prisma.stream.findMany({
-      where: {
-        status: 'LIVE' // שולף רק מה שבסטטוס LIVE
-      },
-      include: {
-        host: true, // מביא גם את פרטי המנחה (שם, תמונה וכו')
-        games: true // מביא את המשחקים המשויכים לשידור
-      }
-    });
+    const userId = req.user.id; 
+
+    // קריאה לשירות כדי לקבל את הנתונים
+    // אנו מעבירים את ה-userId למקרה שנצטרך אותו בלוגיקה (גם אם כרגע לא משתמשים בו)
+    const liveStreams = await feedService.fetchActiveStreams(userId);
 
     res.status(200).json(liveStreams);
 
