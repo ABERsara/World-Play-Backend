@@ -9,6 +9,7 @@ import streamRoutes from '../routes/stream.routes.js';
 import gameRoutes from '../routes/games.routes.js';
 import questionRoutes from '../routes/question.routes.js';
 import corsOptions from '../config/corsOptions.js';
+import analyticsRoutes from '../routes/analytics.routes.js';
 
 dotenv.config();
 
@@ -30,7 +31,7 @@ app.use('/users', userRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/streams', streamRoutes);
 app.use('/api/games', gameRoutes);
-app.use('/api/questions', questionRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/', (req, res) => {
   res.send('Live Game Streaming Backend is Running!');
