@@ -1,3 +1,5 @@
+import validationService from './validation.service.js';
+import permissionsService from './permissions.service.js';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
@@ -5,15 +7,20 @@ const questionService = {
   /**
    * יצירת שאלה חדשה עם אופציות
    */
-  async createQuestion(gameId, { questionText, rewardType, options }) {
-    const game = await prisma.game.findUnique({ where: { id: gameId } });
-    if (!game) throw new Error('Game not found');
+  async createQuestion(gameId, userId, { questionText, rewardType, options }) {
+    // 1. בדיקות ולידציה בסיסיות
+    const game = await validationService.ensureGameExists(gameId);
+    validationService.validateGameIsActive(game);
+    validationService.validateQuestionData(questionText, options);
+    await permissionsService.ensureModerator(gameId, userId);
+    // 2. יצירת השאלה עם האופציות בטרנזקציה אחת
 
     return await prisma.question.create({
       data: {
         gameId,
         questionText,
         rewardType: rewardType || 'STANDARD',
+        isResolved: false,
         options: {
           create: options.map((option) => ({
             text: option.text,
@@ -26,13 +33,21 @@ const questionService = {
         options: true,
       },
     });
-  }, // <--- שים לב לפסיק הזה! הוא מפריד בין הפונקציות
-
+  },
   /**
    * עדכון התשובה הנכונה וסגירת השאלה
    */
-  async resolveQuestion(questionId, correctOptionId) {
-    // 1. ביצוע הטרנזקציה (עדכון הנתונים)
+  async resolveQuestion(questionId, userId, correctOptionId) {
+    // א. קודם שולפים את השאלה כדי להבין לאיזה משחק היא שייכת
+    const question = await prisma.question.findUnique({
+      where: { id: questionId },
+    });
+
+    if (!question) throw new Error('Question not found');
+
+    // ב. בדיקת הרשאה: האם המשתמש הוא מנחה במשחק הספציפי הזה?
+    await permissionsService.ensureModerator(question.gameId, userId);
+    //  ביצוע הטרנזקציה (עדכון הנתונים)
     await prisma.$transaction([
       // איפוס תשובות קודמות
       prisma.questionOption.updateMany({

@@ -2,6 +2,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
 }
 
 datasource db {
@@ -167,6 +168,7 @@ model Game {
   streamId    String   @map("stream_id")
   
   createdAt   DateTime @default(now()) @map("created_at")
+  startedAt  DateTime? @map("started_at")                // מתי הפך ל-ACTIVE (התחלה בפועל)
   updatedAt   DateTime @updatedAt @map("updated_at")
   finishedAt  DateTime? @map("finished_at")
 
@@ -326,7 +328,7 @@ model ViewLog {
   userId                String    @map("user_id")      // The viewer
   gameId                String    @map("game_id")      // The specific game
   hostId                String    @map("host_id")      // <--- Adding this field is critical for the feed
-  
+  startedAt  DateTime? @map("started_at")
   duration              Int       // Seconds
   answersCount          Int       @map("answers_count")
   participationPercent  Float     @map("participation_percent")

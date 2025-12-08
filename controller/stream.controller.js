@@ -14,13 +14,16 @@ const streamController = {
         });
       }
 
-      const stream = await streamService.createStream(userId, {
-        title,
-      });
-
+      const stream = await streamService.createStream(userId, { title });
       res.status(201).json({ message: 'הסטרים נוצר בהצלחה', stream });
     } catch (error) {
       console.error('Create Stream Error:', error);
+
+      // טיפול בשגיאת "יש לך כבר סטרים פעיל"
+      if (error.message.includes('already have an active stream')) {
+        return res.status(409).json({ error: error.message });
+      }
+
       res.status(500).json({ error: 'שגיאה ביצירת הסטרים' });
     }
   },

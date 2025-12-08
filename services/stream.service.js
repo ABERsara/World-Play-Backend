@@ -1,9 +1,11 @@
 import { PrismaClient } from '@prisma/client';
+import validationService from './validation.service.js';
 const prisma = new PrismaClient();
 
 const streamService = {
   // יצירת סטרים חדש
   async createStream(hostId, { title }) {
+    await validationService.validateUserHasNoActiveStream(hostId);
     return await prisma.stream.create({
       data: {
         title,

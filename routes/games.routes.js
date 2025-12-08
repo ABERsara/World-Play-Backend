@@ -11,8 +11,8 @@ router.use(authenticateToken);
 router.post('/', gameController.createGame);
 
 // עדכון סטטוס (למשל לסיום המשחק)
-// PATCH /api/games/{GAME_ID}/status
-router.patch('/:id/status', gameController.updateStatus);
+// PUT /api/games/{GAME_ID}/status
+router.put('/:id/status', gameController.updateStatus);
 
 //הצטרפות למשחק
 // POST /api/games/{GAME_ID}/join

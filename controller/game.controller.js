@@ -4,7 +4,6 @@ const gameController = {
   // POST /api/games
   async createGame(req, res) {
     try {
-      // הנחה: המשתמש מזוהה דרך ה-Token
       const userId = req.user.id;
       const { title, description, streamId, moderatorId } = req.body;
 
@@ -24,7 +23,7 @@ const gameController = {
       res.status(201).json({ message: 'המשחק נוצר בהצלחה', game });
     } catch (error) {
       console.error('Create Game Error:', error);
-      // טיפול חכם בשגיאות מפתח זר (P2003)
+      // טיפול בשגיאות מפתח זר (P2003)
       if (error.code === 'P2003') {
         const fieldName = error.meta?.field_name || '';
 
@@ -48,6 +47,7 @@ const gameController = {
     try {
       const { id } = req.params;
       const { status } = req.body;
+      const userId = req.user.id;
 
       // ולידציה לסטטוסים המותרים למשחק
       const validStatuses = ['WAITING', 'ACTIVE', 'FINISHED'];
@@ -58,7 +58,11 @@ const gameController = {
         });
       }
 
-      const updatedGame = await gameService.updateGameStatus(id, status);
+      const updatedGame = await gameService.updateGameStatus(
+        id,
+        userId,
+        status
+      );
 
       res.status(200).json({ message: 'סטטוס המשחק עודכן', game: updatedGame });
     } catch (error) {
@@ -74,7 +78,6 @@ const gameController = {
     try {
       const { id } = req.params; // Game ID
       const userId = req.user.id;
-
       const { role } = req.body;
       // יש לוודא שה-role שנשלח הוא אחד מהערכים ב-Enum UserRole
       const validRoles = ['PLAYER', 'VIEWER', 'MODERATOR', 'HOST'];
@@ -102,10 +105,18 @@ const gameController = {
       if (error.message.includes('Unauthorized')) {
         return res.status(403).json({ error: error.message });
       }
-      if (error.message.includes('Cannot join game')) {
-        return res
-          .status(409)
-          .json({ error: 'המשחק כבר פעיל או הסתיים ולא ניתן להצטרף' });
+      // 2. שגיאות קונפליקט (מנסה תפקיד כפול, או משחק במקביל)
+      if (
+        error.message.includes('Conflict') ||
+        error.message.includes('already playing') ||
+        error.message.includes('already has a HOST')
+      ) {
+        return res.status(409).json({ error: error.message });
+      }
+
+      // 3. שגיאות לוגיות (משחק סגור)
+      if (error.message.includes('Cannot join')) {
+        return res.status(400).json({ error: error.message });
       }
 
       res.status(500).json({ error: 'שגיאה בהצטרפות למשחק' });
