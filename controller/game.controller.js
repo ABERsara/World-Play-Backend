@@ -24,12 +24,20 @@ const gameController = {
       res.status(201).json({ message: 'המשחק נוצר בהצלחה', game });
     } catch (error) {
       console.error('Create Game Error:', error);
-      // בדיקה אם הסטרים בכלל קיים
+      // טיפול חכם בשגיאות מפתח זר (P2003)
       if (error.code === 'P2003') {
-        // Foreign key constraint failed
-        return res
-          .status(404)
-          .json({ error: 'הסטרים (streamId) שצוין לא קיים' });
+        const fieldName = error.meta?.field_name || '';
+
+        if (fieldName.includes('moderator_id')) {
+          return res
+            .status(404)
+            .json({ error: 'המשתמש שצוין כמנחה (moderatorId) לא נמצא במערכת' });
+        }
+        if (fieldName.includes('stream_id')) {
+          return res
+            .status(404)
+            .json({ error: 'הסטרים (streamId) שצוין לא קיים' });
+        }
       }
       res.status(500).json({ error: 'שגיאה ביצירת המשחק' });
     }
@@ -59,6 +67,48 @@ const gameController = {
         return res.status(404).json({ error: 'משחק לא נמצא' });
       }
       res.status(500).json({ error: 'שגיאה בעדכון סטטוס המשחק' });
+    }
+  },
+  // POST /api/games/:id/join
+  async joinGame(req, res) {
+    try {
+      const { id } = req.params; // Game ID
+      const userId = req.user.id;
+
+      const { role } = req.body;
+      // יש לוודא שה-role שנשלח הוא אחד מהערכים ב-Enum UserRole
+      const validRoles = ['PLAYER', 'VIEWER', 'MODERATOR', 'HOST'];
+      const assignedRole = role && validRoles.includes(role) ? role : 'PLAYER';
+
+      const result = await gameService.joinGame(id, userId, assignedRole);
+
+      if (result.alreadyJoined) {
+        return res.status(200).json({
+          message: 'המשתמש כבר רשום למשחק זה',
+          participant: result.participant,
+        });
+      }
+
+      res.status(201).json({
+        message: 'הצטרפת למשחק בהצלחה!',
+        participant: result.participant,
+      });
+    } catch (error) {
+      console.error('Join Game Error:', error);
+
+      if (error.message === 'Game not found') {
+        return res.status(404).json({ error: 'המשחק לא נמצא' });
+      }
+      if (error.message.includes('Unauthorized')) {
+        return res.status(403).json({ error: error.message });
+      }
+      if (error.message.includes('Cannot join game')) {
+        return res
+          .status(409)
+          .json({ error: 'המשחק כבר פעיל או הסתיים ולא ניתן להצטרף' });
+      }
+
+      res.status(500).json({ error: 'שגיאה בהצטרפות למשחק' });
     }
   },
 };

@@ -8,11 +8,10 @@ import userRoutes from '../routes/user.routes.js';
 import financeRoutes from '../routes/finance.routes.js';
 import streamRoutes from '../routes/stream.routes.js';
 import gameRoutes from '../routes/games.routes.js';
-import chatRouter from '../routes/chat.router.js'; // ודא נתיב נכון
-
-// ייבוא קונפיגורציה ושירותי Socket
+import questionRoutes from '../routes/question.routes.js';
 import corsOptions from '../config/corsOptions.js';
 import { initializeSocketIO } from '../services/socket.service.js'; // ודא נתיב נכון
+import analyticsRoutes from '../routes/analytics.routes.js';
 
 dotenv.config();
 
@@ -33,12 +32,7 @@ app.use('/users', userRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/streams', streamRoutes);
 app.use('/api/games', gameRoutes);
-app.use('/api/chat', chatRouter);
-
-// --- אתחול Socket.IO (ללא כפילות) ---
-// העברת משתנה server המוגדר מעלה
-const io = initializeSocketIO(server); 
-app.set('io', io); // עכשיו io מוגדר היטב
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/', (req, res) => {
   res.send('Live Game Streaming Backend is Running!');
