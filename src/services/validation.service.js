@@ -17,7 +17,7 @@ const validationService = {
   },
 
   /**
-   * בדיקה גנרית שמשתמש קיים במערכת
+   * בדיקה גנרית שמשתמש קיים במערכת (לפי ID)
    */
   async ensureUserExists(userId) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -25,20 +25,37 @@ const validationService = {
     return user;
   },
 
-  // --- בדיקות סטטוס משחק ---
+  /**
+   * בדיקה למטרת התחברות: האם המשתמש קיים לפי אימייל?
+   * מחזיר את המשתמש כדי שנוכל לבדוק סיסמה
+   */
+  async ensureUserExistsByEmail(email) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // זורקים שגיאה כללית כדי לא לחשוף אם המייל קיים או לא (Security best practice)
+      throw new Error('אימייל או סיסמה שגויים.');
+    }
+    return user;
+  },
 
   /**
-   * מוודא שהמשחק במצב שמאפשר פעילות
+   * בדיקה למטרת רישום: מוודא שהאימייל *לא* קיים במערכת
    */
+  async validateEmailIsUnique(email) {
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new Error('משתמש עם אימייל זה כבר קיים.');
+    }
+  },
+
+  // --- בדיקות סטטוס משחק ---
+
   validateGameIsActive(game) {
     if (game.status !== 'ACTIVE') {
       throw new Error(`Action not allowed. Game is currently ${game.status}`);
     }
   },
 
-  /**
-   * בודק אם מותר לשנות סטטוס
-   */
   validateStatusTransition(currentStatus, newStatus) {
     if (currentStatus === 'FINISHED') {
       throw new Error('Cannot change status of a finished game');
@@ -48,9 +65,6 @@ const validationService = {
     }
   },
 
-  /**
-   * בדיקה שהסטרים פנוי
-   */
   async validateStreamIsFree(streamId) {
     const busyStreamGame = await prisma.game.findFirst({
       where: {
@@ -66,9 +80,6 @@ const validationService = {
     }
   },
 
-  /**
-   * בדיקה: האם למשתמש כבר יש סטרים פעיל?
-   */
   async validateUserHasNoActiveStream(userId) {
     const activeStream = await prisma.stream.findFirst({
       where: {
@@ -84,9 +95,6 @@ const validationService = {
     }
   },
 
-  /**
-   * בדיקה שהמארח פנוי
-   */
   async validateHostIsAvailable(userId) {
     const activeEngagement = await prisma.gameParticipant.findFirst({
       where: {
@@ -105,7 +113,7 @@ const validationService = {
     }
   },
 
-  // --- ולידציות מורכבות להצטרפות (Join Game) ---
+  // --- ולידציות מורכבות להצטרפות ---
 
   async validateJoinEligibility(gameId, userId, requestedRole) {
     const game = await this.ensureGameExists(gameId);
@@ -181,18 +189,12 @@ const validationService = {
     }
   },
 
-  /**
-   * ולידציה לטקסט - שלא יהיה ריק
-   */
   validateNonEmptyText(text, fieldName = 'Content') {
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       throw new Error(`${fieldName} cannot be empty`);
     }
   },
 
-  /**
-   * בדיקה ששני משתמשים קיימים (למשל לפני פתיחת צ'אט)
-   */
   async ensureChatParticipantsExist(senderId, receiverId) {
     if (senderId === receiverId) {
       throw new Error('You cannot send a message to yourself');
@@ -203,24 +205,15 @@ const validationService = {
     ]);
   },
 
-  /**
-   * פונקציית עזר לאיחוד מערכים וניקוי כפילויות
-   */
   mergeUniqueIds(...arrays) {
     const combined = arrays.flat();
     return [...new Set(combined)];
   },
 
-  /**
-   * חוקים לאינטראקציה משמעותית
-   */
   getSignificantInteractionRules() {
     return [{ duration: { gt: 60 } }, { participationPercent: { gt: 0.2 } }];
-  }, // <--- הנה הפסיק שהיה חסר!
+  },
 
-  /**
-   * בדיקת קיום התראה
-   */
   async ensureNotificationExists(notificationId) {
     const notification = await prisma.notification.findUnique({
       where: { id: notificationId },
