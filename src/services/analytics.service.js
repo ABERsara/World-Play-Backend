@@ -8,11 +8,11 @@ export const createViewLog = async (userId, reportData) => {
   // 1. קודם כל, נשלוף את המשחק כדי להבין מי ה-Host שלו
   const game = await prisma.game.findUnique({
     where: { id: gameId },
-    select: { hostId: true } // אנחנו צריכים רק את ה-ID של המארח
+    select: { hostId: true }, // אנחנו צריכים רק את ה-ID של המארח
   });
 
   if (!game) {
-    throw new Error("Game not found");
+    throw new Error('Game not found');
   }
 
   // 2. חישוב אחוזי השתתפות

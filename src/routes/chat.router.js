@@ -1,7 +1,10 @@
 import { Router } from 'express';
-import { getChatHistory, sendMessageAPI } from '../controller/chat.controller.js';
+import {
+  getChatHistory,
+  sendMessageAPI,
+} from '../controller/chat.controller.js';
 // נניח שיש לך middleware לאימות משתמשים
-// import { protect } from '../middleware/auth.middleware.js'; 
+// import { protect } from '../middleware/auth.middleware.js';
 
 const router = Router();
 

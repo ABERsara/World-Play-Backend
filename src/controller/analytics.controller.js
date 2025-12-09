@@ -8,13 +8,12 @@ export const reportAnalytics = async (req, res) => {
     // קריאה לפונקציה מהסרביס
     const newLog = await analyticsService.createViewLog(userId, reportData);
 
-    res.status(201).json({ 
-      message: "Analytics reported successfully", 
-      log: newLog 
+    res.status(201).json({
+      message: 'Analytics reported successfully',
+      log: newLog,
     });
-
   } catch (error) {
-    console.error("Error reporting analytics:", error);
-    res.status(500).json({ error: "Failed to report analytics" });
+    console.error('Error reporting analytics:', error);
+    res.status(500).json({ error: 'Failed to report analytics' });
   }
 };

@@ -1,8 +1,7 @@
-
 const router = express.Router();
 import express from 'express';
 
-import * as feedController from '../controller/feed.controller.js'; 
+import * as feedController from '../controller/feed.controller.js';
 import * as analyticsController from '../controller/analytics.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 // --- הגדרת הכתובות ---

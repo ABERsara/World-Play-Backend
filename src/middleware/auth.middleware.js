@@ -1,11 +1,9 @@
 import jwt from 'jsonwebtoken';
 
 export const authenticateToken = (req, res, next) => {
-
   const JWT_SECRET = process.env.JWT_SECRET;
 
   const authHeader = req.headers['authorization'];
-
 
   if (!authHeader) {
     return res.status(401).json({ message: 'גישה נדחתה: לא סופק טוקן' });
@@ -25,6 +23,7 @@ export const authenticateToken = (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
+    console.error('Token verification failed:', error);
     return res.status(403).json({ message: 'טוקן לא תקף או פג תוקף' });
   }
 };
