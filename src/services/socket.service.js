@@ -15,7 +15,7 @@ export const initializeSocketIO = (httpServer) => {
     const user = socket.user;
     logger.socketConnect(user, socket.id);
 
-    // אנחנו שולחים לה את ה-io וה-socket כדי שתדע עם מי לדבר
+    // אנחנו שולחים לה את ה-io וה-socket כדי שנדע עם מי לדבר
     registerGameHandlers(io, socket);
 
     socket.on('disconnect', (reason) => {

@@ -63,16 +63,42 @@ const gameController = {
         userId,
         status
       );
+      const io = req.app.get('io');
 
-      res.status(200).json({ message: 'סטטוס המשחק עודכן', game: updatedGame });
+      if (io) {
+        // שידור לכל מי שנמצא בחדר של המשחק הזה (Room = GameID)
+        io.to(id).emit('game_status_update', {
+          status: updatedGame.status,
+          gameId: updatedGame.id,
+          timestamp: new Date(),
+        });
+        console.log(
+          ` Socket Event Emitted: game_status_update -> ${status} for Room ${id}`
+        );
+      } else {
+        console.error(' Socket IO instance not found in request!');
+      }
+
+      res
+        .status(200)
+        .json({ message: 'סטטוס המשחק עודכן ושודר', game: updatedGame });
     } catch (error) {
       console.error('Update Game Status Error:', error);
-      if (error.code === 'P2025') {
-        return res.status(404).json({ error: 'משחק לא נמצא' });
-      }
+
+      if (error.message.includes('not found'))
+        return res.status(404).json({ error: error.message });
+      if (
+        error.message.includes('Unauthorized') ||
+        error.message.includes('Permission')
+      )
+        return res.status(403).json({ error: error.message });
+      if (error.message.includes('Cannot change'))
+        return res.status(400).json({ error: error.message });
+
       res.status(500).json({ error: 'שגיאה בעדכון סטטוס המשחק' });
     }
   },
+
   // POST /api/games/:id/join
   async joinGame(req, res) {
     try {

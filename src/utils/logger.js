@@ -25,12 +25,12 @@ export const logger = {
   },
 
   success: (msg) => {
-    console.log(`${COLORS.green}[SUCCESS]${COLORS.reset} ✅ ${msg}`);
+    console.log(`${COLORS.green}[SUCCESS]${COLORS.reset}  ${msg}`);
   },
 
   error: (msg, error = '') => {
     console.error(
-      `${COLORS.red}[ERROR ${getTimestamp()}]${COLORS.reset} ❌ ${msg}`,
+      `${COLORS.red}[ERROR ${getTimestamp()}]${COLORS.reset}  ${msg}`,
       error
     );
   },
@@ -52,13 +52,13 @@ export const logger = {
 
   socketAction: (user, action, details = '') => {
     console.log(
-      `${COLORS.blue}[SOCKET ACTION]${COLORS.reset} 👤 ${user.username} ➡ ${COLORS.cyan}${action}${COLORS.reset} ${details}`
+      `${COLORS.blue}[SOCKET ACTION]${COLORS.reset} ${user.username} ➡ ${COLORS.cyan}${action}${COLORS.reset} ${details}`
     );
   },
 
   socketJoin: (user, roomId) => {
     console.log(
-      `${COLORS.blue}[ROOM JOIN]${COLORS.reset} 🏠 User ${COLORS.yellow}${user.username}${COLORS.reset} joined room: ${COLORS.cyan}${roomId}${COLORS.reset}`
+      `${COLORS.blue}[ROOM JOIN]${COLORS.reset} User ${COLORS.yellow}${user.username}${COLORS.reset} joined room: ${COLORS.cyan}${roomId}${COLORS.reset}`
     );
   },
 };

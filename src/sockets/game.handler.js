@@ -34,7 +34,7 @@ export const registerGameHandlers = (io, socket) => {
         return;
       }
 
-      // 2. רישום שחקן ב-DB האמיתי! (טבלת GameParticipant)
+      // 2. רישום שחקן ב-DB  (טבלת GameParticipant)
       await prisma.gameParticipant.create({
         data: {
           gameId: gameId,
@@ -53,7 +53,7 @@ export const registerGameHandlers = (io, socket) => {
         msg: `Successfully joined game as ${role}`,
       });
 
-      // 5. עדכון בזמן אמת לכל מי שבחדר! (למשל: עדכון מונה צופים)
+      // 5. עדכון בזמן אמת לכל מי שבחדר (למשל: עדכון מונה צופים)
       io.to(gameId).emit('room_update', {
         type: 'USER_JOINED',
         userId: user.id,
