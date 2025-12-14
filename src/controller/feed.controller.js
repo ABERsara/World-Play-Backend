@@ -1,4 +1,4 @@
-import * as feedService from '../services/feed.service.js';
+import feedService from '../services/feed.service.js';
 
 export const getLiveFeed = async (req, res) => {
   try {

@@ -1,5 +1,4 @@
-import * as analyticsService from '../services/analytics.service.js'; // ייבוא הסרביס
-
+import analyticsService from '../services/analytics.service.js';
 export const reportAnalytics = async (req, res) => {
   try {
     const userId = req.user.id;

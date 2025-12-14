@@ -1,15 +1,12 @@
-// src/services/socket.service.js
 import { Server } from 'socket.io';
-import { socketAuth } from '../middleware/socketAuth.js';
 import { logger } from '../utils/logger.js';
 import { registerGameHandlers } from '../sockets/game.handler.js';
 
 export const initializeSocketIO = (httpServer) => {
+  // הגדרת CORS כדי לאפשר חיבורים מה-Client
   const io = new Server(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
   });
-
-  io.use(socketAuth);
 
   io.on('connection', (socket) => {
     const user = socket.user;
@@ -23,6 +20,5 @@ export const initializeSocketIO = (httpServer) => {
     });
   });
 
-  logger.system('Socket.io Service Initialized');
   return io;
 };
