@@ -43,10 +43,10 @@ export const logger = {
     );
   },
 
-  socketDisconnect: (user, reason) => {
+  socketDisconnect: (user, socketId, reason) => {
     const username = user ? user.username : 'Unknown';
     console.log(
-      `${COLORS.red}[SOCKET DISCONNECT]${COLORS.reset} User: ${username} | Reason: ${reason}`
+      `${COLORS.red}[SOCKET DISCONNECT]${COLORS.reset} User: ${username} | ID: ${socketId} | Reason: ${reason}`
     );
   },
 

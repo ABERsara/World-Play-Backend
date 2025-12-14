@@ -15,7 +15,13 @@ export const registerGameHandlers = (io, socket) => {
       socket.emit('error', { msg: 'Missing gameId' });
       return;
     }
-
+    if (socket.rooms.has(gameId)) {
+      logger.info(`User ${user.username} is already in socket room ${gameId}`);
+      socket.emit('system_message', {
+        msg: 'You are already connected to this room.',
+      });
+      return;
+    }
     try {
       // 1. בדיקה לוגית מול ה-DB (האם המשחק קיים? פעיל? המשתמש חסום?)
       const validation = await gameRules.validateJoinEligibility(
