@@ -1,20 +1,37 @@
-// src/sockets/game.handler.js
 import { PrismaClient } from '@prisma/client';
+import { JoinGameSchema } from '@worldplay/shared'; 
 import { logger } from '../utils/logger.js';
 import * as gameRules from '../services/validation.service.js';
 
 const prisma = new PrismaClient();
 
 export const registerGameHandlers = (io, socket) => {
-  const user = socket.user; // המשתמש שכבר אומת ב-Auth Middleware
+  const user = socket.user; 
 
   // --- אירוע: הצטרפות לחדר ---
-  socket.on('join_room', async ({ gameId, role = 'VIEWER' }) => {
-    if (!gameId) {
-      logger.error(`User ${user.username} tried to join without gameId`);
-      socket.emit('error', { msg: 'Missing gameId' });
-      return;
+  socket.on('join_room', async (payload) => { // מקבלים את כל האובייקט (payload)
+    
+    // שלב 1: ולידציה מבנית (Zod) - השומר בכניסה
+    // אנחנו בודקים את המידע שהגיע מהלקוח מול הסכמה המשותפת
+    const validationResult = JoinGameSchema.safeParse(payload);
+
+    if (!validationResult.success) {
+      // התיקון: הוספת סימן שאלה (?) אחרי user ושימוש בערך ברירת מחדל
+      const username = user?.username || 'Unknown/Guest';
+      
+console.warn(`Validation failed for user ${username}`, JSON.stringify(validationResult.error.format(), null, 2));      
+      socket.emit('error', { 
+        msg: 'Invalid data format', 
+        details: validationResult.error.format() 
+      });
+      return; 
     }
+
+    // מעכשיו משתמשים בנתונים הנקיים שעברו ולידציה
+    const { gameId, role } = validationResult.data; 
+
+    // שלב 2: ולידציה עסקית (DB) - הלוגיקה הקיימת שלך
+    
     if (socket.rooms.has(gameId)) {
       logger.info(`User ${user.username} is already in socket room ${gameId}`);
       socket.emit('system_message', {
@@ -22,15 +39,17 @@ export const registerGameHandlers = (io, socket) => {
       });
       return;
     }
+
     try {
-      // 1. בדיקה לוגית מול ה-DB (האם המשחק קיים? פעיל? המשתמש חסום?)
+      // המשך הלוגיקה המקורית שלך נשאר זהה לחלוטין!
+      // ההבדל היחיד הוא שאנחנו בטוחים ש-gameId הוא באמת מחרוזת תקינה
+      
       const validation = await gameRules.validateJoinEligibility(
         gameId,
         user.id,
-        role
+        role || 'VIEWER' // ברירת מחדל אם לא הוגדר בסכמה
       );
 
-      // אם המשתמש כבר רשום, רק נחבר אותו מחדש לסוקט
       if (validation.status === 'ALREADY_JOINED') {
         socket.join(gameId);
         logger.socketJoin(user, gameId);
@@ -40,26 +59,24 @@ export const registerGameHandlers = (io, socket) => {
         return;
       }
 
-      // 2. רישום שחקן ב-DB  (טבלת GameParticipant)
+      // רישום שחקן ב-DB
       await prisma.gameParticipant.create({
         data: {
           gameId: gameId,
           userId: user.id,
-          role: role,
+          role: role || 'VIEWER',
           score: 0,
         },
       });
 
-      // 3. הצטרפות פיזית לחדר בסוקט
+      // הצטרפות פיזית לחדר בסוקט
       socket.join(gameId);
       logger.socketJoin(user, gameId);
 
-      // 4. הודעה לשחקן שהצליח
       socket.emit('system_message', {
         msg: `Successfully joined game as ${role}`,
       });
 
-      // 5. עדכון בזמן אמת לכל מי שבחדר (למשל: עדכון מונה צופים)
       io.to(gameId).emit('room_update', {
         type: 'USER_JOINED',
         userId: user.id,

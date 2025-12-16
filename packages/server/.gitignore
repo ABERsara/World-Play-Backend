@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build Output
+dist/
+build/
+coverage/
+
+# Prisma
+# Ignore generated client (it's built on install)
+prisma/generated/
+generated/
+# Ignore SQLite files if used locally
+prisma/dev.db
+*.db
+*.db-journal
+
+# Docker Volumes (Prevents committing the DB data itself)
+postgres_data/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor Settings
+.vscode/
+.idea/
+
