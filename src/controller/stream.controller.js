@@ -1,4 +1,5 @@
 import streamService from '../services/stream.service.js';
+import gameService from '../services/game.service.js'; // חובה להוסיף את הייבוא הזה!
 
 const streamController = {
   // POST /api/streams
@@ -28,33 +29,57 @@ const streamController = {
     }
   },
 
-  // PUT /api/streams/:id/status
+  // PATCH /api/games/:id/status
   async updateStatus(req, res) {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      let { status } = req.body;
+      const userId = req.user.id;
 
-      const validStatuses = ['WAITING', 'LIVE', 'PAUSE', 'FINISHED'];
+      if (status) status = status.trim().toUpperCase();
+
+      const validStatuses = ['WAITING', 'ACTIVE', 'FINISHED', 'LIVE', 'PAUSE'];
 
       if (!status || !validStatuses.includes(status)) {
         return res.status(400).json({
-          error: `סטטוס לא תקין. ערכים מותרים: ${validStatuses.join(', ')}`,
+          error: `סטטוס לא תקין. קיבלתי: "${status}".`,
         });
       }
 
-      const updatedStream = await streamService.updateStreamStatus(id, status);
+      let result;
+
+      // לוגיקה חכמה: אם זה סטטוס של סטרים, פנה ל-streamService. אם של משחק, ל-gameService.
+      if (status === 'LIVE' || status === 'PAUSE') {
+        result = await streamService.updateStreamStatus(id, userId, status);
+      } else {
+        result = await gameService.updateGameStatus(id, userId, status);
+      }
+
+      // Socket.io (לפי ה-ID שקיבלנו)
+      const io = req.app.get('io');
+      if (io) {
+        io.to(id).emit('status_update', {
+          status: result.status,
+          id: result.id,
+        });
+      }
 
       res.status(200).json({
-        message: 'סטטוס הסטרים עודכן בהצלחה',
-        stream: updatedStream,
+        message: 'הסטטוס עודכן בהצלחה',
+        data: result,
       });
     } catch (error) {
-      console.error('Update Stream Status Error:', error);
-      if (error.code === 'P2025') {
-        // קוד שגיאה של פריזמה ל"לא נמצא"
-        return res.status(404).json({ error: 'סטרים לא נמצא' });
-      }
-      res.status(500).json({ error: 'שגיאה בעדכון סטטוס הסטרים' });
+      console.error('Update Status Error:', error);
+
+      // זה ימנע את השגיאה הכללית ויראה לך מה הבעיה האמיתית בטרמינל
+      if (error.message.includes('not found'))
+        return res.status(404).json({ error: 'לא נמצא' });
+      if (error.message.includes('Unauthorized'))
+        return res.status(403).json({ error: 'אין הרשאה' });
+
+      res
+        .status(500)
+        .json({ error: error.message || 'שגיאה פנימית בעדכון הסטטוס' });
     }
   },
 };

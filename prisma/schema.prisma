@@ -249,8 +249,10 @@ model UserAnswer {
   question Question     @relation(fields: [questionId], references: [id])
   option   QuestionOption @relation(fields: [selectedOptionId], references: [id])
 
-  @@index([questionId, userId])
+  @@unique([userId, questionId])
   @@map("user_answers")
+
+
 }
 
 // 9. User Points Table
