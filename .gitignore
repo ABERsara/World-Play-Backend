@@ -1,42 +1,28 @@
 # Dependencies
 node_modules/
+yarn.lock
 
-# Environment Variables & Secrets (CRITICAL)
+# Environment Variables
 .env
 .env.local
-.env.development
-.env.test
-.env.production
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Build Output
+# Build Outputs
 dist/
 build/
 coverage/
 
-# Prisma
-# Ignore generated client (it's built on install)
-prisma/generated/
-generated/
-# Ignore SQLite files if used locally
-prisma/dev.db
-*.db
-*.db-journal
-
-# Docker Volumes (Prevents committing the DB data itself)
-postgres_data/
-
-# System Files
-.DS_Store
-Thumbs.db
-
-# IDE / Editor Settings
+# IDE & System
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.log
+npm-debug.log*
 
+# Framework specifics
+.expo/
+web-build/

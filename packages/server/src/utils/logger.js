@@ -38,9 +38,12 @@ export const logger = {
   // --- לוגים ספציפיים לסוקט ---
 
   socketConnect: (user, socketId) => {
-    console.log(
-      `${COLORS.green}[SOCKET CONNECT]${COLORS.reset} User: ${COLORS.yellow}${user.username}${COLORS.reset} (Role: ${user.role}) | ID: ${socketId}`
-    );
+    const username = user?.username || 'Guest'; // אם אין יוזר, נקרא לו Guest
+const role = user?.role || 'UNKNOWN';
+
+console.log(
+  `${COLORS.green}[SOCKET CONNECT]${COLORS.reset} User: ${COLORS.yellow}${username}${COLORS.reset} (Role: ${role}) | ID: ${socketId}`
+);
   },
 
   socketDisconnect: (user, socketId, reason) => {
