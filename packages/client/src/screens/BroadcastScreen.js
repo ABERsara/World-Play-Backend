@@ -1,96 +1,90 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, Button, StyleSheet, SafeAreaView } from 'react-native';
-import { RTCView, mediaDevices } from 'react-native-webrtc';
+import React, { useEffect, useState } from 'react';
+// הוספנו את Platform כאן למטה ברשימת הייבוא
+import { View, Text, Button, StyleSheet, SafeAreaView, Platform } from 'react-native';
+
+// שימוש במצלמת הדפדפן לעבודה ב-Web
+const mediaDevices = typeof window !== 'undefined' ? window.navigator.mediaDevices : null;
+
 import { socket } from '../services/socket.service';
 import { mediasoupClient } from '../services/MediasoupClient';
 
 export default function BroadcastScreen() {
   const [localStream, setLocalStream] = useState(null);
   const [isLive, setIsLive] = useState(false);
-  const [status, setStatus] = useState('Ready');
+  const [status, setStatus] = useState('Initializing...');
 
-  // 1. אתחול ראשוני: חיבור לסוקט וקבלת גישה למצלמה
   useEffect(() => {
-    // התחברות לשרת
-    if (!socket.connected) {
-      socket.connect();
-    }
-
-    socket.on('connect', () => {
-      console.log('✅ Connected to WebSocket server');
-      setStatus('Connected to Server');
+  // וודא שהסוקט קיים לפני הוספת מאזינים
+  if (socket) {
+    socket.on('connect', () => setStatus('Connected to Server'));
+    socket.on('connect_error', (err) => {
+        console.error("Socket Error:", err);
+        setStatus('Server Connection Failed');
     });
+  }
 
-    startCamera();
+  startCamera();
 
-    return () => {
-      // ניקוי ביציאה
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-      }
-      socket.disconnect();
-    };
-  }, []);
+  return () => {
+    if (socket) {
+      socket.off('connect');
+      socket.off('connect_error');
+    }
+  };
+}, []);
 
-  // 2. פונקציה להפעלת המצלמה המקומית
   const startCamera = async () => {
     try {
-      const stream = await mediaDevices.getUserMedia({
-        audio: true,
-        video: {
-          width: 640,
-          height: 480,
-          frameRate: 30,
-          facingMode: 'user', // מצלמה קדמית
-        },
-      });
-      setLocalStream(stream);
-      setStatus('Camera Ready');
+      if (mediaDevices && mediaDevices.getUserMedia) {
+        const stream = await mediaDevices.getUserMedia({
+          audio: true,
+          video: { width: 1280, height: 720 }
+        });
+        setLocalStream(stream);
+        setStatus('Camera Ready');
+      } else {
+        setStatus('Preview Mode (No Camera)');
+      }
     } catch (error) {
-      console.error('Error accessing camera:', error);
-      setStatus('Camera Error: ' + error.message);
+      console.error('Camera Error:', error);
+      setStatus('Camera Access Denied');
     }
   };
 
-  // 3. לוגיקת השידור (החלק המעניין!)
   const startBroadcast = async () => {
-    if (!localStream) return;
-    setStatus('Starting Stream...');
-
-    const gameId = 'game-' + Math.floor(Math.random() * 1000); // מזהה משחק זמני
-
     try {
-      // א. בקשת פתיחת חדר מהשרת כדי לקבל את ה-RTP Capabilities
-      socket.emit('stream:create_room', { gameId }, async (response) => {
-        if (response.error) throw new Error(response.error);
+      setStatus('Step 1: Getting Router Capabilities...');
+      
+      socket.emit('getRouterRtpCapabilities', async (rtpCapabilities) => {
+        try {
+          await mediasoupClient.loadDevice(rtpCapabilities);
+          setStatus('Step 2: Creating Transport...');
 
-        console.log('1. Room created, received capabilities');
-        
-        // ב. טעינת ה-Device של mediasoup
-        const device = await mediasoupClient.loadDevice(response.rtpCapabilities);
+          socket.emit('createTransport', async (transportParams) => {
+            try {
+              const transport = await mediasoupClient.createSendTransport(transportParams, socket);
+              setStatus('Step 3: Starting Stream...');
 
-        // ג. יצירת Transport בשרת
-        socket.emit('stream:create_transport', { gameId }, async (transportParams) => {
-           if (transportParams.error) throw new Error(transportParams.error);
-           
-           console.log('2. Transport created on server');
-
-           // ד. יצירת Transport בצד הלקוח וחיבור אירועים
-           const sendTransport = await mediasoupClient.createSendTransport(transportParams, socket);
-
-           // ה. התחלת הזרמת הוידאו!
-           console.log('3. Producing video...');
-           const producer = await mediasoupClient.produce(localStream);
-           
-           console.log('✅ We are LIVE! Producer ID:', producer.id);
-           setIsLive(true);
-           setStatus('🔴 LIVE ON AIR');
-        });
+              if (localStream) {
+                await mediasoupClient.produce(localStream);
+                setIsLive(true);
+                setStatus('LIVE 🔴');
+              } else {
+                setStatus('Error: No Camera Stream');
+              }
+            } catch (err) {
+              console.error('Transport Error:', err);
+              setStatus('Transport Failed');
+            }
+          });
+        } catch (err) {
+          console.error('Device Load Error:', err);
+          setStatus('Device Loading Failed');
+        }
       });
-
     } catch (error) {
-      console.error('Broadcast failed:', error);
-      setStatus('Error: ' + error.message);
+      console.error('Broadcast Start Error:', error);
+      setStatus('Broadcast Failed');
     }
   };
 
@@ -98,29 +92,41 @@ export default function BroadcastScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Broadcast Studio</Text>
-        <Text style={styles.status}>{status}</Text>
+        <View style={styles.statusBadge}>
+          <View style={[styles.dot, { backgroundColor: isLive ? '#ff4757' : '#ffa502' }]} />
+          <Text style={styles.statusText}>{status}</Text>
+        </View>
       </View>
 
       <View style={styles.cameraContainer}>
         {localStream ? (
-          <RTCView
-            streamURL={localStream.toURL()}
-            style={styles.camera}
-            objectFit="cover"
-            mirror={true}
-          />
+          // בדיקה האם אנחנו בדפדפן
+          Platform.OS === 'web' ? (
+            <video
+              autoPlay
+              playsInline
+              muted
+              style={{ width: '100%', height: '100%', borderRadius: 15, objectFit: 'cover' }}
+              ref={(video) => {
+                if (video && localStream) video.srcObject = localStream;
+              }}
+            />
+          ) : (
+            <Text style={{color: 'white'}}>Mobile Video Placeholder</Text>
+          )
         ) : (
           <View style={styles.placeholder}>
-            <Text>Loading Camera...</Text>
+            <Text style={styles.placeholderText}>Camera Preview</Text>
+            <Text style={styles.placeholderSubText}>Ready to start the stream</Text>
           </View>
         )}
       </View>
 
-      <View style={styles.controls}>
+      <View style={styles.footer}>
         {!isLive ? (
-          <Button title="Start Live Stream" onPress={startBroadcast} color="#e74c3c" />
+          <Button title="START LIVE" onPress={startBroadcast} color="#ff4757" />
         ) : (
-          <Button title="Stop Stream" onPress={() => console.log('Stop logic here')} color="#555" />
+          <Button title="STOP STREAM" onPress={() => setIsLive(false)} color="#2f3542" />
         )}
       </View>
     </SafeAreaView>
@@ -128,12 +134,15 @@ export default function BroadcastScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  header: { padding: 20, alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: 'bold' },
-  status: { marginTop: 5, color: '#666' },
-  cameraContainer: { flex: 1, margin: 20, borderRadius: 20, overflow: 'hidden', backgroundColor: '#000' },
-  camera: { flex: 1, width: '100%', height: '100%' },
-  placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ddd' },
-  controls: { padding: 20 },
+  container: { flex: 1, backgroundColor: '#000' },
+  header: { padding: 20, alignItems: 'center', backgroundColor: '#1a1a1a' },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#fff', letterSpacing: 1 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, backgroundColor: '#333', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  statusText: { color: '#ccc', fontSize: 12, fontWeight: '600' },
+  cameraContainer: { flex: 1, margin: 15, borderRadius: 15, backgroundColor: '#1e1e1e', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  placeholder: { alignItems: 'center' },
+  placeholderText: { color: '#fff', fontSize: 18, fontWeight: '500' },
+  placeholderSubText: { color: '#666', fontSize: 12, marginTop: 8 },
+  footer: { padding: 20, backgroundColor: '#1a1a1a' }
 });

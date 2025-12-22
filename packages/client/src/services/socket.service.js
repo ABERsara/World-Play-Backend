@@ -1,13 +1,28 @@
-import { io } from "socket.io-client";
+import { io } from 'socket.io-client';
 
-// ⚠️ חשוב: שני את ה-URL בהתאם למכשיר שלך!
-// אימולטור אנדרואיד: "http://10.0.2.2:8080"
-// מכשיר אמיתי: ה-IP של המחשב שלך, למשל "http://192.168.1.20:8080"
-// סימולטור אייפון: "http://localhost:8080"
+const SOCKET_URL = "http://localhost:8080";
 
-const SOCKET_URL = "http://10.0.2.2:8080"; 
+// יצירת משתנה ריק לסוקט
+export let socket = null;
 
-export const socket = io(SOCKET_URL, {
-  transports: ["websocket"],
-  autoConnect: false,
-});
+// רק אם אנחנו בדפדפן, נאתחל את אובייקט הסוקט
+if (typeof window !== 'undefined') {
+  socket = io(SOCKET_URL, {
+    autoConnect: false, // מונע חיבור אוטומטי לפני שיש טוקן
+    auth: {
+      token: localStorage.getItem('userToken')
+    }
+  });
+}
+
+export const connectSocket = () => {
+  // הגנה מפני הרצה בשרת (SSR)
+  if (typeof window === 'undefined' || !socket) return;
+
+  const token = localStorage.getItem('userToken');
+  if (token) {
+    socket.auth = { token };
+    socket.connect();
+    console.log('✅ Socket connecting with token...');
+  }
+};

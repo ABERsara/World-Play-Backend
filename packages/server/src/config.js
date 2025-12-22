@@ -35,7 +35,7 @@ export const config = {
     webRtcTransport: {
       listenIps: [
         {
-          ip: '0.0.0.0',
+          ip: process.env.RIKI_IP,
           announcedIp: process.env.ANNOUNCED_IP || '127.0.0.1' // שימי לב: בפרודקשן זה ה-IP הציבורי
         }
       ],

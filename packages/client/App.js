@@ -1,19 +1,5 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View } from 'react-native';
 import BroadcastScreen from './src/screens/BroadcastScreen';
 
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <BroadcastScreen />
-      <StatusBar style="auto" />
-    </View>
-  );
+export default function Page() {
+  return <BroadcastScreen />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-});

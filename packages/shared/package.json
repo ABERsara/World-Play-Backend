@@ -1,15 +1,11 @@
 {
   "name": "@worldplay/shared",
   "version": "1.0.0",
-  "description": "",
   "main": "src/index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
   "dependencies": {
     "zod": "^4.2.1"
   }
