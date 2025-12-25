@@ -1,5 +1,6 @@
 // src/services/auth.service.js
 
+// שנה לכתובת ה-IP של השרת שלך אם את בודקת ממכשיר פיזי (למשל: 192.168.1.10)
 const API_URL = 'http://localhost:8080/api/users';
 
 export const authService = {
@@ -14,11 +15,13 @@ export const authService = {
       const data = await response.json();
 
       if (response.ok && data.token) {
-        // בדיקה שאנחנו בדפדפן לפני שמירה
         if (typeof window !== 'undefined') {
           localStorage.setItem('userToken', data.token);
         }
-        return data;
+        
+        // פענוח הטוקן כדי לקבל את פרטי המשתמש (Role, ID וכו')
+        const payload = JSON.parse(atob(data.token.split('.')[1]));
+        return { ...data, user: payload }; 
       } else {
         throw new Error(data.message || 'Login failed');
       }
@@ -29,11 +32,21 @@ export const authService = {
   },
 
   getToken: () => {
-    // הגנה מפני קריסה בשרת (SSR)
     if (typeof window !== 'undefined') {
       return localStorage.getItem('userToken');
     }
     return null;
+  },
+
+  // פונקציה שמפענחת את הטוקן הקיים
+  getUser: () => {
+    const token = authService.getToken();
+    if (!token) return null;
+    try {
+      return JSON.parse(atob(token.split('.')[1]));
+    } catch (e) {
+      return null;
+    }
   },
 
   logout: () => {

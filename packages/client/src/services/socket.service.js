@@ -1,28 +1,39 @@
 import { io } from 'socket.io-client';
+import { authService } from './auth.service';
 
-const SOCKET_URL = "http://localhost:8080";
-
-// יצירת משתנה ריק לסוקט
+const SOCKET_URL = "http://localhost:8080"; 
 export let socket = null;
 
-// רק אם אנחנו בדפדפן, נאתחל את אובייקט הסוקט
-if (typeof window !== 'undefined') {
-  socket = io(SOCKET_URL, {
-    autoConnect: false, // מונע חיבור אוטומטי לפני שיש טוקן
-    auth: {
-      token: localStorage.getItem('userToken')
-    }
-  });
-}
-
 export const connectSocket = () => {
-  // הגנה מפני הרצה בשרת (SSR)
-  if (typeof window === 'undefined' || !socket) return;
+  if (socket && socket.connected) return socket;
 
-  const token = localStorage.getItem('userToken');
-  if (token) {
-    socket.auth = { token };
-    socket.connect();
-    console.log('✅ Socket connecting with token...');
-  }
+  const token = authService.getToken();
+  if (!token) return null;
+
+  socket = io(SOCKET_URL, {
+    auth: { token },
+    transports: ['websocket']
+  });
+
+  return socket;
+};
+
+// וודאי שהשורה הזו נראית בדיוק ככה:
+export const emitPromise = (type, data) => {
+  return new Promise((resolve, reject) => {
+    // אם הסוקט לא קיים, ננסה לחבר אותו
+    const activeSocket = socket || connectSocket();
+    
+    if (!activeSocket) {
+      return reject(new Error('סוקט לא מחובר'));
+    }
+
+    activeSocket.emit(type, data, (response) => {
+      if (response && response.error) {
+        reject(new Error(response.error));
+      } else {
+        resolve(response);
+      }
+    });
+  });
 };
