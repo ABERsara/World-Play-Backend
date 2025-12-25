@@ -143,15 +143,19 @@ model CreditCard {
 
 // 3. Stream Table
 model Stream {
-  id        String       @id @default(uuid())
-  title     String
-  hostId    String       @map("host_id")
-  startTime DateTime?    @map("start_time")
-  endTime   DateTime?    @map("end_time")
-  status    StreamStatus @default(WAITING)
-lastPausedAt DateTime?    @map("last_paused_at")
-  host      User         @relation("HostStreams", fields: [hostId], references: [id])
-  games     Game[]
+  id            String       @id @default(uuid())
+  title         String
+  hostId        String       @map("host_id")
+  startTime     DateTime?    @map("start_time")
+  endTime       DateTime?    @map("end_time")
+  status        StreamStatus @default(WAITING)
+  lastPausedAt  DateTime?    @map("last_paused_at")
+  
+  // השדה החדש להוספה:
+  lastTimestamp Float        @default(0) @map("last_timestamp")
+
+  host          User         @relation("HostStreams", fields: [hostId], references: [id])
+  games         Game[]
   
   @@map("streams")
 }

@@ -1,6 +1,26 @@
-// stream.controller.js
 import streamService from '../services/stream.service.js';
 import gameService from '../services/game.service.js';
+
+// פונקציית עזר: טקסט או מספר -> שניות (Float)
+function parseToSeconds(videoTimestamp) {
+    if (videoTimestamp === null || videoTimestamp === undefined) return 0;
+    if (typeof videoTimestamp === 'number') return videoTimestamp;
+    
+    if (typeof videoTimestamp === 'string' && videoTimestamp.includes(':')) {
+        const [minutes, seconds] = videoTimestamp.split(':').map(Number);
+        return (minutes * 60) + (seconds || 0);
+    }
+    
+    return parseFloat(videoTimestamp) || 0;
+}
+
+// פונקציית עזר: שניות (Float) -> טקסט "MM:SS"
+function secondsToTime(seconds) {
+    if (!seconds || seconds < 0) return "00:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
 
 const streamController = {
     // POST /api/streams
@@ -17,14 +37,11 @@ const streamController = {
             res.status(201).json({ message: 'הסטרים נוצר בהצלחה', stream });
         } catch (error) {
             console.error('Create Stream Error:', error);
-            if (error.message.includes('already have an active stream')) {
-                return res.status(409).json({ error: error.message });
-            }
             res.status(500).json({ error: 'שגיאה ביצירת הסטרים' });
         }
     },
 
-    // PATCH /api/games/:id/status
+    // PATCH /api/streams/:id/status
     async updateStatus(req, res) {
         try {
             const { id } = req.params;
@@ -38,21 +55,21 @@ const streamController = {
                 return res.status(400).json({ error: `סטטוס לא תקין: ${status}` });
             }
 
+            const seconds = parseToSeconds(videoTimestamp);
+
             let result;
             const io = req.app.get('io');
 
-            // פיצול לוגיקה בין סטרים למשחק
             if (status === 'LIVE' || status === 'PAUSE') {
-                // בעדכון סטטוס כללי, אם זה PAUSE, נשתמש ב-Service הייעודי או נעדכן ישירות
-                result = await streamService.updateStreamStatus(id, userId, status, videoTimestamp);
+                result = await streamService.updateStreamStatus(id, userId, status, seconds);
                 
-                // שליחת אירוע ספציפי לסטרים
                 if (io) {
                     const eventName = status === 'PAUSE' ? 'stream_paused' : 'status_update';
                     io.to(id).emit(eventName, {
                         id,
                         status,
-                        videoTimestamp: videoTimestamp || null
+                        videoTimestamp: seconds,
+                        displayTime: secondsToTime(seconds)
                     });
                 }
             } else {
@@ -60,11 +77,13 @@ const streamController = {
                 if (io) io.to(id).emit('status_update', { id, status });
             }
 
-            res.status(200).json({ message: 'הסטטוס עודכן בהצלחה', data: result });
+            res.status(200).json({ 
+                message: 'הסטטוס עודכן בהצלחה', 
+                videoTimestamp: secondsToTime(seconds), // מחזיר למשל "02:45"
+                data: result 
+            });
         } catch (error) {
             console.error('Update Status Error:', error);
-            if (error.message.includes('not found')) return res.status(404).json({ error: 'לא נמצא' });
-            if (error.message.includes('Unauthorized')) return res.status(403).json({ error: 'אין הרשאה' });
             res.status(500).json({ error: error.message || 'שגיאה בעדכון הסטטוס' });
         }
     },
@@ -74,22 +93,25 @@ const streamController = {
         try {
             const { id } = req.params;
             const { videoTimestamp } = req.body;
-            const userId = req.user.id;
+            
+            const seconds = parseToSeconds(videoTimestamp);
+            const result = await streamService.pauseStream(id, seconds);
 
-            // עדכון ב-DB
-            const result = await streamService.pauseStream(id, videoTimestamp);
-
-            // עדכון הצופים ב-Socket
             const io = req.app.get('io');
             if (io) {
                 io.to(id).emit('stream_paused', {
                     streamId: id,
-                    videoTimestamp,
+                    videoTimestamp: seconds,
+                    displayTime: secondsToTime(seconds),
                     status: 'PAUSE'
                 });
             }
 
-            res.status(200).json({ message: 'הסטרים הושהה', videoTimestamp, data: result });
+            res.status(200).json({ 
+                message: 'הסטרים הושהה', 
+                videoTimestamp: secondsToTime(seconds), // מחזיר למשל "02:45"
+                data: result 
+            });
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
@@ -99,18 +121,29 @@ const streamController = {
     async resumeStream(req, res) {
         try {
             const { id } = req.params;
-            const result = await streamService.resumeStream(id);
+            const updatedStream = await streamService.resumeStream(id);
+            
+            const formattedTime = secondsToTime(updatedStream.lastTimestamp);
 
             const io = req.app.get('io');
             if (io) {
-                io.to(id).emit('stream_resumed', { streamId: id, status: 'LIVE' });
+                io.to(id).emit('stream_resumed', { 
+                    streamId: id,
+                    status: 'LIVE',
+                    videoTimestamp: updatedStream.lastTimestamp,
+                    displayTime: formattedTime
+                });
             }
 
-            res.status(200).json({ message: 'השידור חודש', data: result });
+            res.status(200).json({
+                message: 'השידור חודש',
+                videoTimestamp: formattedTime, // מחזיר "02:45"
+                data: updatedStream
+            });
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
-    }
+    },
 };
 
 export default streamController;

@@ -45,25 +45,52 @@ const streamService = {
   },
 
   // תיקון תחביר: בתוך אובייקט משתמשים ב-async שםהפונקציה() ולא ב-const
-  async pauseStream(streamId, videoTimestamp) {
-    return await prisma.stream.update({
-      where: { id: streamId },
-      data: {
-        status: 'PAUSE',
-        lastPausedAt: new Date(),
-        // אם הוספת שדה videoTimestamp בפריזמה, עדכני אותו כאן:
-        // videoTimestamp: videoTimestamp 
-      },
-    });
-  },
+async pauseStream(streamId, videoTimestamp) {
+  return await prisma.stream.update({
+    where: { id: streamId },
+    data: {
+      status: 'PAUSE',
+      lastPausedAt: new Date(),
+      // כאן הטעות בדרך כלל - ודאי שהשורה הזו קיימת:
+      lastTimestamp: parseFloat(videoTimestamp) || 0 
+    },
+  });
+},
 
-  async resumeStream(streamId) {
-    return await prisma.stream.update({
-      where: { id: streamId },
-      data: { status: 'LIVE' },
-    });
-  },
+async resumeStream(streamId) {
+  return await prisma.stream.update({
+    where: { id: streamId },
+    data: { 
+      status: 'LIVE',
+      lastPausedAt: null // איפוס זמן ההשהיה כי חזרנו לשידור חי
+    },
+    // אופציונלי: להוסיף select כדי לוודא ששדה ה-timestamp חוזר
+    select: {
+      id: true,
+      status: true,
+      lastTimestamp: true, // זה השדה הקריטי שהנגן צריך!
+      title: true
+    }
+  });resumeStream
+},
+
+
+  async captureStreamSnapshot(streamId, currentTimestamp) {
+  return await prisma.stream.update({
+    where: { id: streamId },
+    data: {
+      lastTimestamp: currentTimestamp,
+      lastPausedAt: new Date(),
+      status: 'PAUSE'
+    }
+  });
+}
+
+
 };
+
+
+
 
 export default streamService;
 
