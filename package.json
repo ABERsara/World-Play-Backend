@@ -3,5 +3,14 @@
   "private": true,
   "workspaces": [
     "packages/*"
+<<<<<<< HEAD
   ]
 }
+=======
+  ],
+  "dependencies": {
+    "@worldplay/shared": "^1.0.0",
+    "mediasoup-client": "^3.18.3"
+  }
+}
+>>>>>>> m3/feat/backend-core-webrtc-setup

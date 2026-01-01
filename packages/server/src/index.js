@@ -12,15 +12,27 @@ import questionRoutes from './routes/question.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import chatRoutes from './routes/chat.router.js';
 import notificationRoutes from './routes/notification.routes.js';
-
 import corsOptions from './config/corsOptions.js';
 
 // ייבוא שירות הסוקט
 import { initializeSocketIO } from './services/socket.service.js';
+import { createWorkers } from './services/mediasoup.service.js';
 
-dotenv.config();
-dotenv.config({ path: '../../.env' });
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// הגדרת נתיבים (בגלל שאת ב-ES Modules)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ... (אחרי יצירת ה-app)
 const app = express();
+
+// הוספי את השורה הזו: הגדרת התיקייה public כסטטית
+app.use(express.static(path.join(__dirname, '../public')));
+app.use('/libs', express.static(path.join(__dirname, '../node_modules')));
+dotenv.config();
+
 // מוגדר כ-server
 const server = http.createServer(app);
 
@@ -53,7 +65,16 @@ const io = initializeSocketIO(server);
 console.log('👉 STEP 2: Socket init passed'); // בדיקה 2
 
 app.set('io', io);
-
+const startServer = async () => {
+  // 1. אתחול Mediasoup
+  try {
+    await createWorkers();
+    console.log('✅ Mediasoup Workers Initialized');
+  } catch (err) {
+    console.error('❌ Failed to start Mediasoup:', err);
+  }
 server.listen(PORT, () => {
-  console.log(`✅ Server is running on http://localhost:${PORT}`);
-});
+    console.log(`✅ Server is running on http://localhost:${PORT}`);
+  });
+};
+startServer();

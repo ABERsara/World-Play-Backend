@@ -1,3 +1,4 @@
+// stream.service.js
 import { PrismaClient } from '@prisma/client';
 import * as gameRules from '../services/validation.service.js';
 

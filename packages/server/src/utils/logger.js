@@ -34,7 +34,11 @@ export const logger = {
       error
     );
   },
-
+warn: (msg) => {
+    console.warn(
+      `${COLORS.yellow}[WARN ${getTimestamp()}]${COLORS.reset} ${msg}`
+    );
+  },
   // --- לוגים ספציפיים לסוקט ---
 
   socketConnect: (user, socketId) => {

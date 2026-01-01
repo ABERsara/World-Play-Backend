@@ -1,3 +1,4 @@
+//game.service.js
 import { PrismaClient } from '@prisma/client';
 import permissionsService from './permissions.service.js';
 import * as gameRules from '../services/validation.service.js'; // ודאי שהקובץ הזה קיים בתיקיית services
@@ -5,34 +6,40 @@ const prisma = new PrismaClient();
 
 const gameService = {
   /**
-   * יצירת משחק חדש
+   * יצירת משחק חדש (כולל יצירת סטרים אוטומטית!)
+   * המארח שולח רק פרטי משחק, אנחנו דואגים לשאר.
    */
-  async createGame(userId, { title, description, streamId, moderatorId }) {
-    // א. האם הסטרים קיים במערכת?
-    await gameRules.ensureStreamExists(streamId);
-    // ב. האם הסטרים פנוי?
-    await gameRules.validateStreamIsFree(streamId);
-    // ג. האם המארח פנוי לארח ולא מארח במשחק פעיל אחר?
-    await gameRules.validateHostIsAvailable(userId);
-    // --- יצירת המשחק ---
+  async createGame(userId, { title, description, moderatorId }) {
+    
+    // בדיקה שהמארח פנוי (לפי הלוגיקה שלך)
+    await gameRules.validateHostIsAvailable(userId); // (הערה: תוודאי שיש לך את זה או תשימי בהערה בינתיים)
 
-    // בגלל שאנחנו צריכים ליצור גם GAME וגם PARTICIPANT (עבור המארח),
-    // נעשה את זה בטרנזקציה כדי שאם אחד ייכשל, הכל יתבטל.
-
+    // --- טרנזקציה: יצירת סטרים + משחק + משתתף במכה אחת ---
     return await prisma.$transaction(async (tx) => {
-      // 1. יצירת המשחק
+      
+      // 1. יצירת סטרים אוטומטית (מוסתר מהמשתמש)
+      // לפי האפיון: הסטרים מתחיל ב-WAITING
+      const newStream = await tx.stream.create({
+        data: {
+          title: `Stream for: ${title}`,
+          hostId: userId,
+          status: 'WAITING'
+        }
+      });
+
+      // 2. יצירת המשחק (מקושר לסטרים שיצרנו הרגע)
       const newGame = await tx.game.create({
         data: {
           title,
           description,
-          streamId,
-          moderatorId: moderatorId || null, // אם לא סופק, נשמור כ-NULL
-          hostId: userId, // שדה לצורכי תיעוד מהיר (אם קיים בסכימה שלך)
-          status: 'WAITING', // ברירת מחדל
+          streamId: newStream.id, // <--- הקישור הקריטי!
+          moderatorId: moderatorId || null,
+          hostId: userId,
+          status: 'WAITING'
         },
       });
 
-      // 2. רישום המארח כמשתתף (HOST) באופן אוטומטי
+      // 3. רישום המארח כמשתתף (HOST)
       await tx.gameParticipant.create({
         data: {
           gameId: newGame.id,
@@ -41,7 +48,12 @@ const gameService = {
         },
       });
 
-      return newGame;
+      // אנחנו מחזירים את אובייקט המשחק, אבל "מזריקים" לתוכו גם את ה-Stream ID
+      // כדי שהקליינט ידע לאן להתחבר ב-WebRTC
+      return {
+        ...newGame,
+        streamId: newStream.id 
+      };
     });
   },
   /**
