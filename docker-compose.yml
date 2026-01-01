@@ -13,7 +13,7 @@ services:
       - .:/usr/src/app
       - /usr/src/app/node_modules
       - /usr/src/app/packages/server/node_modules
-      - /usr/src/app/packages/shared/node_modules # הוספנו את זה
+      - /usr/src/app/packages/shared/node_modules 
     depends_on:
       - db
       - media-server
