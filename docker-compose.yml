@@ -18,7 +18,9 @@ services:
     env_file: .env
     ports:
       - "8080:8080"
-    depends_on:
+      - "5555:5555"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
       - db
 
   media-server:
@@ -26,6 +28,8 @@ services:
       context: .
       dockerfile: packages/media-server/Dockerfile
     env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
     ports:
       - "8000:8000"
       - "10000-10100:10000-10100/udp"
