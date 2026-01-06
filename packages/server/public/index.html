@@ -30,11 +30,9 @@
         const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjU2YzY4NDdhLWY5OTUtNDdlOS04NGY3LWU2ZjA5YTAzMjU3OSIsInJvbGUiOiJWSUVXRVIiLCJlbWFpbCI6IkhPU1RORVdAdGVzdC5jb20iLCJpYXQiOjE3NjYzMTc0ODIsImV4cCI6MTc2NjMxOTI4Mn0.MLPjEXdUDeu7AdfrNF1DwkzJzm-PsKDcwHmhzTIvSd8";
         const STREAM_ID = "c3a5047a-4088-41fd-b249-3748d9cf4193"; 
 
-        const socket = io({
-          auth: {
-            token: TOKEN 
-          }
-        });
+        const socket = io("http://localhost:8000", {
+    auth: { token: TOKEN }
+});
 
         // פונקציית עזר ללוגים
         const log = (msg, isError = false) => {

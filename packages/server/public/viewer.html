@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Viewer Test Lab 🍿</title>
+    <title>Viewer Test Lab </title>
     <style>
         body { font-family: sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; }
         video { width: 640px; height: 480px; background: black; border: 2px solid #2ecc71; margin: 20px; }
@@ -14,7 +14,7 @@
 </head>
 <body>
 
-    <h1>Viewer Test Lab 🍿</h1>
+    <h1>Viewer Test Lab </h1>
     <h3 id="connectionStatus" class="status">Disconnected</h3>
     
     <video id="remoteVideo" autoplay playsinline controls></video>
@@ -30,10 +30,9 @@
         
         const STREAM_ID = "c3a5047a-4088-41fd-b249-3748d9cf4193"; 
 
-        const socket = io({
-            auth: { token: TOKEN }
-        });
-
+        const socket = io("http://localhost:8000", {
+    auth: { token: TOKEN }
+});
         let device;
         let consumerTransport;
         

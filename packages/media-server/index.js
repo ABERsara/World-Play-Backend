@@ -1,64 +1,80 @@
 import express from 'express';
-import { spawn } from 'child_process'; // כלי להרצת פקודות חיצוניות (כמו FFmpeg)
+import http from 'http';
+import { Server } from 'socket.io';
+import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
+import { logger } from './src/utils/logger.js';
+import { socketAuth } from './src/middleware/socketAuth.js';
+import { createWorkers } from './src/services/mediasoup.service.js';
+import { registerStreamHandlers } from './src/sockets/stream.handler.js';
+import { spawn } from 'child_process';
 import path from 'path';
-import fs from 'fs';
 
+dotenv.config();
+const prisma = new PrismaClient();
 const app = express();
-const PORT = 8000;
-const TEMP_DIR = '/tmp/media'; // התיקייה שמיפינו בדוקר
+const httpServer = http.createServer(app);
+const PORT = process.env.MEDIA_PORT || 8000;
 
-// ודואים שהתיקייה קיימת
-if (!fs.existsSync(TEMP_DIR)) {
-    fs.mkdirSync(TEMP_DIR, { recursive: true });
-}
-
-app.get('/', (req, res) => {
-    res.send('Media Server is active and ready for streaming');
+// אתחול Socket.io עם ה-Logger וה-Auth שלך
+const io = new Server(httpServer, {
+    cors: { origin: '*', methods: ['GET', 'POST'] },
 });
-// Endpoint לקבלת שידור חי
+
+io.use(socketAuth); // שימוש במנגנון האימות הקיים שלך
+
+io.on('connection', (socket) => {
+    // שימוש בלוגר המקורי שלך
+    logger.socketConnect(socket.user, socket.id);
+
+    // רישום ה-Handlers של המדיה בלבד
+    registerStreamHandlers(io, socket);
+
+    socket.on('disconnect', (reason) => {
+        logger.socketDisconnect(socket.user, socket.id, reason);
+    });
+});
+
+// Endpoint ל-FFmpeg (הפרדה ל-Process נפרד)
 app.post('/live/:streamId', (req, res) => {
     const { streamId } = req.params;
-    const streamPath = path.join(TEMP_DIR, streamId);
-
-    // 1. יצירת תיקייה ייחודית לשידור הזה
-    if (!fs.existsSync(streamPath)) {
-        fs.mkdirSync(streamPath, { recursive: true });
-    }
-
-    console.log(`📹 Starting stream processing for: ${streamId}`);
-
-    // 2. הגדרת פקודת FFmpeg
-    // הפקודה הזו לוקחת וידאו מה-stdin (הקלט של השרת) והופכת אותו ל-HLS
+    logger.system(`FFMPEG: Starting process for stream ${streamId}`);
+    
     const ffmpeg = spawn('ffmpeg', [
-        '-i', 'pipe:0',             // קבלת קלט מהצינור (stdin)
-        '-c:v', 'libx264',         // קידוד וידאו סטנדרטי
-        '-preset', 'veryfast',      // מהירות עיבוד מקסימלית
-        '-f', 'hls',               // פורמט יציאה: HLS
-        '-hls_time', '2',          // כל מקטע (Segment) יהיה באורך 2 שניות
-        '-hls_list_size', '5',     // לשמור רק את 5 המקטעים האחרונים בפלייליסט
-        '-hls_flags', 'delete_segments', // למחוק מקטעים ישנים כדי לא למלא את הדיסק
-        path.join(streamPath, 'index.m3u8') // קובץ הפלייליסט הסופי
+        '-i', 'pipe:0', '-c:v', 'libx264', '-preset', 'veryfast',
+        '-f', 'hls', '-hls_time', '2', '-hls_list_size', '5',
+        '-hls_flags', 'delete_segments', `public/temp/${streamId}/index.m3u8`
     ]);
 
-    // 3. הזרמת הנתונים מהבקשה (req) ישירות לתוך FFmpeg
     req.pipe(ffmpeg.stdin);
-
-    ffmpeg.stderr.on('data', (data) => {
-        // כאן FFmpeg מדפיס לוגים של העיבוד (אפשר להשתיק אם זה יותר מדי)
-        // console.log(`FFmpeg [${streamId}]:`, data.toString());
-    });
-
-    ffmpeg.on('close', (code) => {
-        console.log(`🛑 Stream ${streamId} ended with code ${code}`);
-        res.end();
-    });
-
-    req.on('error', (err) => {
-        console.error(`❌ Request error on stream ${streamId}:`, err);
-        ffmpeg.kill();
-    });
+    ffmpeg.on('close', () => logger.info(`FFMPEG: Process closed for ${streamId}`));
 });
-// כאן נוסיף בהמשך את ה-Endpoint שיקבל את הוידאו
-app.listen(PORT, () => {
-    console.log(`🚀 Media Server running on port ${PORT}`);
+
+const startServer = async () => {
+    try {
+        await createWorkers();
+        logger.success('Mediasoup Workers Initialized');
+        
+        httpServer.listen(PORT, () => {
+            logger.system(`Media Server is running on http://localhost:${PORT}`);
+        });
+    } catch (err) {
+        logger.error('Failed to start Media Server', err);
+    }
+};
+// לוגר פשוט - כל בקשה שתגיע תודפס בטרמינל
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] 🔍 Request: ${req.method} ${req.url} from ${req.ip}`);
+  next();
 });
+
+// הודעת הברכה בנתיב הראשי
+app.get('/', (req, res) => {
+  res.json({
+    status: "online",
+    message: "🚀 World-Play Media Server is Live and Running!",
+    timestamp: new Date().toISOString(),
+    service: "media-server"
+  });
+});
+startServer();

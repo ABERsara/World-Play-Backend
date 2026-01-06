@@ -2,7 +2,6 @@ import { Server } from 'socket.io';
 import { socketAuth } from '../middleware/socketAuth.js';
 import { logger } from '../utils/logger.js';
 import { registerGameHandlers } from '../sockets/game.handler.js';
-import { registerStreamHandlers } from '../sockets/stream.handler.js';
 // packages/server/src/services/socket.service.js
 
 export const initializeSocketIO = (httpServer) => {
@@ -23,7 +22,6 @@ export const initializeSocketIO = (httpServer) => {
     logger.socketConnect(user, socket.id);
 
     registerGameHandlers(io, socket);
-    registerStreamHandlers(io, socket); // הנדלר הוידאו שלנו
 
     socket.on('disconnect', (reason) => {
       logger.socketDisconnect(user, socket.id, reason);
