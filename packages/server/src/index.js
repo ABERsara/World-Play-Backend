@@ -80,6 +80,5 @@ app.set('io', io);
 server.listen(PORT, async () => {
     console.log(`✅ Server is running on port ${PORT}`);
     
-    // 4. מפעילים את הבדיקה מיד כשהשרת עולה
     await checkMediaServer();
 });

@@ -7,10 +7,7 @@ const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const userService = {
-  // ---------------------------------------------------------
-  // 1. פונקציות הרשמה והתחברות (משתמשות ב-bcrypt, jwt)
-  // ---------------------------------------------------------
-
+ 
   async createUser(name, username, email, plainPassword) {
     // ולידציות
     validationService.validateNonEmptyText(name, 'Name');
@@ -18,7 +15,6 @@ const userService = {
     validationService.validateNonEmptyText(plainPassword, 'Password');
     await validationService.validateEmailIsUnique(email);
 
-    // הצפנת סיסמה (שימוש ב-bcrypt)
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
     const newUser = await prisma.user.create({
@@ -39,13 +35,11 @@ const userService = {
     // בדיקת קיום משתמש
     const user = await validationService.ensureUserExistsByEmail(email);
 
-    // בדיקת סיסמה (שימוש ב-bcrypt)
     const isPasswordValid = await bcrypt.compare(plainPassword, user.password);
     if (!isPasswordValid) {
       throw new Error('אימייל או סיסמה שגויים.');
     }
 
-    // יצירת טוקן (שימוש ב-jwt וב-JWT_SECRET)
     const token = jwt.sign(
       { userId: user.id, userRole: user.role },
       JWT_SECRET,
