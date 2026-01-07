@@ -1,47 +1,38 @@
+# version: '3.8'
+
 services:
-  # --- Backend Application ---
-  app:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: user        
+      POSTGRES_PASSWORD: password 
+      POSTGRES_DB: worldplaydb  
+    ports:
+      - "5432:5432"
+
+  app-server:
     build:
       context: .
       dockerfile: packages/server/Dockerfile
-    container_name: world_play_app_backend
-    env_file:
-      - .env
+    env_file: .env
     ports:
-      - '${PORT}:${PORT}'
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-      - /usr/src/app/packages/server/node_modules
-      - /usr/src/app/packages/shared/node_modules 
-    depends_on:
+      - "8080:8080"
+      - "5555:5555"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
       - db
-      - media-server
 
-  # --- Media Server (WebRTC + FFmpeg) ---
   media-server:
     build:
-      context: ./packages/media-server
-      dockerfile: Dockerfile
-    container_name: world_play_media_server
+      context: .
+      dockerfile: packages/media-server/Dockerfile
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
     ports:
       - "8000:8000"
       - "10000-10100:10000-10100/udp"
-    volumes:
-      - ./packages/media-server/temp:/tmp/media
-
-  # --- DB ---
-  db:
-    image: postgres:15-alpine
-    container_name: world_play_app_db
-    ports:
-      - '5432:5432'
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
+      - "10000-10100:10000-10100/tcp"
+    depends_on:
+      - db

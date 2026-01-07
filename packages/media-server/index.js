@@ -1,8 +1,9 @@
 import express from 'express';
 import { spawn } from 'child_process';
 import path from 'path';
-import fs from 'fs';
 
+dotenv.config();
+const prisma = new PrismaClient();
 const app = express();
 const PORT = 8000;
 const TEMP_DIR = path.join(process.cwd(), 'media_files');
@@ -429,3 +430,4 @@ app.listen(PORT, () => {
 ✅ Ready to accept streams!
     `);
 });
+startServer();

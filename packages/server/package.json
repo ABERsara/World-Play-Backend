@@ -1,11 +1,9 @@
 {
-  "name": "world-play-backend",
+  "name": "@worldplay/server",
   "version": "1.0.0",
-  "description": "Node.js backend",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "lint": "eslint .",
@@ -13,15 +11,10 @@
     "format": "prettier --write .",
     "prepare": "husky"
   },
-  "lint-staged": {
-    "*.{js,jsx,ts,tsx,json,css,scss,md}": [
-      "npm run lint:fix",
-      "npm run format"
-    ]
-  },
   "dependencies": {
     "@prisma/client": "5.22.0",
     "@worldplay/shared": "^1.0.0",
+    "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
@@ -37,6 +30,7 @@
     "@eslint/js": "^9.39.1",
     "@types/express": "^5.0.0",
     "@types/node": "^20.0.0",
+    "@types/socket.io": "^3.0.1",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
     "husky": "^9.1.7",
@@ -45,16 +39,5 @@
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ABERsara/World-Play-Backend.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/ABERsara/World-Play-Backend/issues"
-  },
-  "homepage": "https://github.com/ABERsara/World-Play-Backend#readme"
+  }
 }

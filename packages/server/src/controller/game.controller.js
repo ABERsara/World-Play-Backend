@@ -1,3 +1,4 @@
+// game.controller.js
 import gameService from '../services/game.service.js';
 
 const gameController = {
@@ -5,25 +6,27 @@ const gameController = {
   async createGame(req, res) {
     try {
       const userId = req.user.id;
-      const { title, description, streamId, moderatorId } = req.body;
+const { title, description, moderatorId } = req.body;
 
-      // ולידציה: חייבים כותרת ו-streamId כדי ליצור משחק
-      if (!title || !streamId) {
+      if (!title) {
         return res.status(400).json({
-          error: 'חסרים שדות חובה: title, streamId',
+          error: 'חסר שדה חובה: title',
         });
       }
 
+      // קריאה לסרוויס (שעכשיו ייצר גם את הסטרים לבד)
       const game = await gameService.createGame(userId, {
         title,
         description,
-        streamId,
         moderatorId,
       });
+
       res.status(201).json({ message: 'המשחק נוצר בהצלחה', game });
+      
     } catch (error) {
       console.error('Create Game Error:', error);
-      // טיפול בשגיאות מפתח זר (P2003)
+      
+      // טיפול בשגיאות מפתח זר (P2003) - נשאר רלוונטי רק למנחה
       if (error.code === 'P2003') {
         const fieldName = error.meta?.field_name || '';
 
@@ -32,12 +35,8 @@ const gameController = {
             .status(404)
             .json({ error: 'המשתמש שצוין כמנחה (moderatorId) לא נמצא במערכת' });
         }
-        if (fieldName.includes('stream_id')) {
-          return res
-            .status(404)
-            .json({ error: 'הסטרים (streamId) שצוין לא קיים' });
-        }
       }
+      
       res.status(500).json({ error: 'שגיאה ביצירת המשחק' });
     }
   },

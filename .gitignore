@@ -22,6 +22,7 @@ Thumbs.db
 *.swp
 *.log
 npm-debug.log*
+*.txt
 
 # Framework specifics
 .expo/
