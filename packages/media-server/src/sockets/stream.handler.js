@@ -10,6 +10,9 @@ const transports = {};
 const producers = {};  
 const consumers = {};  
 
+
+
+
 export const registerStreamHandlers = (io, socket) => {
   
   const user = socket.user; 
@@ -177,7 +180,7 @@ export const registerStreamHandlers = (io, socket) => {
       callback({ error: error.message });
     }
   });
-  // --- אירוע: הצטרפות צופה לסטרים (הקוד המתוקן) ---
+  // --אירוע: הצטרפות צופה לסטרים  ---
   socket.on('stream:join', async ({ streamId }, callback) => {
     try {
       const streamRoom = streams[streamId];
@@ -204,4 +207,52 @@ export const registerStreamHandlers = (io, socket) => {
       callback({ error: error.message });
     }
   });
+
+  socket.on('disconnect', async (reason) => {
+        logger.socketDisconnect(socket.user, socket.id, reason);
+
+        // אם המשתמש שהתנתק הוא ה-Host של סטרים פעיל
+        for (const streamId in streams) {
+            if (streams[streamId].hostSocketId === socket.id) {
+                await handleCloseStream(streamId, io);
+            }
+        }
+    });
+
+    // הוספת אירוע עצירה ידני (למקרה שהמשתמש לוחץ על כפתור "Stop")
+    socket.on('stream:stop_broadcast', async ({ streamId }) => {
+        if (streams[streamId]?.hostSocketId === socket.id) {
+            await handleCloseStream(streamId, io);
+        }
+    });
+};
+
+// 1. פונקציית עזר לניקוי (מחוץ ל-registerStreamHandlers)
+export const handleCloseStream = async (streamId, io) => {
+    const streamRoom = streams[streamId];
+    if (!streamRoom) return;
+
+    logger.info(`🔴 Cleaning up stream: ${streamId}`);
+
+    // סגירת ה-Router של Mediasoup (מנקה הכל בשרת המדיה)
+    if (streamRoom.router) {
+        streamRoom.router.close();
+    }
+
+    // עדכון ה-DB שהשידור הסתיים
+    try {
+        await prisma.stream.update({
+            where: { id: streamId },
+            data: { status: 'ENDED', endTime: new Date() }
+        });
+        logger.info(`✅ DB Updated: Stream ${streamId} set to ENDED`);
+    } catch (err) {
+        logger.error(`⚠️ DB Close Error: ${err.message}`);
+    }
+
+    // עדכון הצופים
+    io.to(streamId).emit('stream:ended', { streamId });
+
+    // מחיקה מהזכרון
+    delete streams[streamId];
 };
