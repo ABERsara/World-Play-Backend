@@ -1,13 +1,39 @@
-import { io } from "socket.io-client";
+import { io } from 'socket.io-client';
+import { authService } from './auth.service';
 
-// ⚠️ חשוב: שני את ה-URL בהתאם למכשיר שלך!
-// אימולטור אנדרואיד: "http://10.0.2.2:8080"
-// מכשיר אמיתי: ה-IP של המחשב שלך, למשל "http://192.168.1.20:8080"
-// סימולטור אייפון: "http://localhost:8080"
+const SOCKET_URL = "http://localhost:8080"; 
+export let socket = null;
 
-const SOCKET_URL = "http://10.0.2.2:8080"; 
+export const connectSocket = () => {
+  if (socket && socket.connected) return socket;
 
-export const socket = io(SOCKET_URL, {
-  transports: ["websocket"],
-  autoConnect: false,
-});
+  const token = authService.getToken();
+  if (!token) return null;
+
+  socket = io(SOCKET_URL, {
+    auth: { token },
+    transports: ['websocket']
+  });
+
+  return socket;
+};
+
+// וודאי שהשורה הזו נראית בדיוק ככה:
+export const emitPromise = (type, data) => {
+  return new Promise((resolve, reject) => {
+    // אם הסוקט לא קיים, ננסה לחבר אותו
+    const activeSocket = socket || connectSocket();
+    
+    if (!activeSocket) {
+      return reject(new Error('סוקט לא מחובר'));
+    }
+
+    activeSocket.emit(type, data, (response) => {
+      if (response && response.error) {
+        reject(new Error(response.error));
+      } else {
+        resolve(response);
+      }
+    });
+  });
+};

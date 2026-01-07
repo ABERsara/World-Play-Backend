@@ -1,83 +1,107 @@
-// packages/client/src/services/MediasoupClient.js
 import { Device } from 'mediasoup-client';
-import { registerGlobals } from 'react-native-webrtc';
-import { Base64 } from 'base-64';
+import * as Base64 from 'base-64';
 
-// 1. Polyfills חובה ל-React Native
-registerGlobals();
-global.btoa = Base64.btoa;
-global.atob = Base64.atob;
+// 1. הגדרת Polyfills קריטיים - פותר את שגיאת ה-btoa/atob
+if (typeof global.btoa === 'undefined') {
+  global.btoa = (str) => Base64.encode(str);
+}
+if (typeof global.atob === 'undefined') {
+  global.atob = (str) => Base64.decode(str);
+}
+
+// 2. ייבוא בטוח של WebRTC - מונע קריסה ב-Expo Go
+try {
+  const webrtc = require('react-native-webrtc');
+  if (webrtc && webrtc.registerGlobals) {
+    webrtc.registerGlobals();
+  }
+} catch (e) {
+  console.log('ℹ️ WebRTC native globals not registered (Normal for Web/Expo Go)');
+}
 
 let device = null;
 let producerTransport = null;
-let consumerTransport = null;
 let producer = null;
 
 export const mediasoupClient = {
-  // 1. אתחול המכשיר (טעינת יכולות)
+  // שלב א: טעינת המכשיר עם יכולות השרת
   loadDevice: async (routerRtpCapabilities) => {
     try {
       device = new Device();
       await device.load({ routerRtpCapabilities });
-      console.log('✅ Device loaded successfully');
+      console.log('✅ Mediasoup Device loaded successfully');
       return device;
     } catch (error) {
-      if (error.name === 'UnsupportedError') {
-        console.error('❌ Browser not supported');
-      }
+      console.error('❌ Failed to load device:', error);
       throw error;
     }
   },
 
-  // 2. יצירת Transport לשידור (Send)
-  createSendTransport: async (data, socket) => {
-    producerTransport = device.createSendTransport(data);
+  // שלב ב: יצירת ערוץ שליחה (Transport) וחיבורו לסוקט
+  createSendTransport: async (transportParams, socket) => {
+    try {
+      if (!device) throw new Error('Device not loaded');
 
-    // אירוע: ה-Transport מוכן וצריך להתחבר לשרת (DTLS)
-    producerTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
-      try {
-        // שולחים לשרת את בקשת החיבור
-        socket.emit('stream:connect_transport', {
-          transportId: producerTransport.id,
-          dtlsParameters,
-        }, () => callback());
-      } catch (error) {
-        errback(error);
-      }
-    });
+      producerTransport = device.createSendTransport(transportParams);
 
-    // אירוע: התחלת השידור בפועל
-    producerTransport.on('produce', async ({ kind, rtpParameters }, callback, errback) => {
-      try {
-        // שולחים לשרת בקשה לשדר
-        socket.emit('stream:produce', {
-          transportId: producerTransport.id,
-          kind,
-          rtpParameters,
-          gameId: 'test-game-id' // נצטרך להעביר את זה דינמית בהמשך
-        }, ({ id }) => {
-          callback({ id });
-        });
-      } catch (error) {
-        errback(error);
-      }
-    });
+      // אירוע חיבור ה-Transport לשרת (DTLS)
+      producerTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+        try {
+          socket.emit('stream:connect_transport', {
+            transportId: producerTransport.id,
+            dtlsParameters,
+          }, () => callback());
+        } catch (error) {
+          errback(error);
+        }
+      });
 
-    return producerTransport;
+      // אירוע יצירת ה-Producer (התחלת הזרמת המידע)
+      producerTransport.on('produce', async ({ kind, rtpParameters }, callback, errback) => {
+        try {
+          socket.emit('stream:produce', {
+            transportId: producerTransport.id,
+            kind,
+            rtpParameters,
+            gameId: 'test-game-id' // ניתן להעביר דינמית
+          }, ({ id }) => {
+            callback({ id });
+          });
+        } catch (error) {
+          errback(error);
+        }
+      });
+
+      return producerTransport;
+    } catch (error) {
+      console.error('❌ Failed to create transport:', error);
+      throw error;
+    }
   },
 
-  // 3. פעולת השידור עצמה (הפעלת המצלמה)
+  // שלב ג: הפקת שידור הוידאו מתוך ה-Stream
   produce: async (stream) => {
-    if (!device) throw new Error('Device not loaded');
-    
-    // לוקחים את טראק הוידאו מהמצלמה
-    const videoTrack = stream.getVideoTracks()[0];
-    // const audioTrack = stream.getAudioTracks()[0]; // נפעיל בהמשך
-
-    if (videoTrack) {
-        producer = await producerTransport.produce({ track: videoTrack });
+    try {
+      if (!producerTransport) throw new Error('Transport not created');
+      
+      const videoTrack = stream.getVideoTracks()[0];
+      
+      if (videoTrack) {
+        producer = await producerTransport.produce({ 
+          track: videoTrack,
+          encodings: [
+            { maxBitrate: 100000 },
+            { maxBitrate: 300000 },
+            { maxBitrate: 900000 },
+          ],
+          codecOptions: { videoGoogleStartBitrate: 1000 }
+        });
+        console.log('✅ Producer created, ID:', producer.id);
+        return producer;
+      }
+    } catch (error) {
+      console.error('❌ Production failed:', error);
+      throw error;
     }
-    
-    return producer;
   }
 };
