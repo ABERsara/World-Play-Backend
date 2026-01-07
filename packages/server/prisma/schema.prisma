@@ -1,7 +1,5 @@
-// schema.prisma
-
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "windows"]
 }
 
@@ -10,7 +8,235 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- ENUMS ---
+model User {
+  id               String            @id @default(uuid())
+  username         String
+  email            String            @unique
+  password         String?
+  role             UserRole          @default(VIEWER)
+  isActive         Boolean           @default(true)
+  isVerified       Boolean           @default(false)
+  lastActiveAt     DateTime?         @map("last_active_at")
+  phoneNumber      String?           @unique
+  firebaseId       String?
+  googleId         String?           @unique
+  facebookId       String?           @unique
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  receivedMessages ChatMessage[]     @relation("Receiver")
+  sentMessages     ChatMessage[]     @relation("Sender")
+  creditCards      CreditCard[]
+  following        Follow[]          @relation("following")
+  followedBy       Follow[]          @relation("followedBy")
+  participations   GameParticipant[]
+  hostedGames      Game[]            @relation("HostGames")
+  moderatedGames   Game[]            @relation("ModeratorGames")
+  notifications    Notification[]
+  hostedStreams    Stream[]          @relation("HostStreams")
+  transactions     Transaction[]
+  userAnswers      UserAnswer[]
+  points           UserPoint[]
+  hostLogs         ViewLog[]         @relation("HostLogs")
+  viewLogs         ViewLog[]
+
+  @@map("users")
+}
+
+model CreditCard {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  last4Digits String   @map("last_4_digits")
+  token       String
+  cvv         String?
+  expDate     String   @map("exp_date")
+  tz          String?
+  isDeleted   Boolean  @default(false) @map("is_deleted")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@map("credit_cards")
+}
+
+model Stream {
+  id           String       @id @default(uuid())
+  title        String
+  hostId       String       @map("host_id")
+  startTime    DateTime?    @map("start_time")
+  endTime      DateTime?    @map("end_time")
+  status       StreamStatus @default(WAITING)
+  lastPausedAt DateTime?    @map("last_paused_at")
+  games        Game[]
+  host         User         @relation("HostStreams", fields: [hostId], references: [id])
+
+  @@map("streams")
+}
+
+model Game {
+  id           String            @id @default(uuid())
+  title        String
+  description  String?
+  hostId       String            @map("host_id")
+  moderatorId  String?           @map("moderator_id")
+  streamId     String            @map("stream_id")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  finishedAt   DateTime?         @map("finished_at")
+  status       GameStatus        @default(WAITING)
+  startedAt    DateTime?         @map("started_at")
+  participants GameParticipant[]
+  host         User              @relation("HostGames", fields: [hostId], references: [id])
+  moderator    User?             @relation("ModeratorGames", fields: [moderatorId], references: [id])
+  stream       Stream            @relation(fields: [streamId], references: [id])
+  questions    Question[]
+  userPoints   UserPoint[]
+  viewLogs     ViewLog[]
+
+  @@map("games")
+}
+
+model GameParticipant {
+  id       String   @id @default(uuid())
+  gameId   String   @map("game_id")
+  userId   String   @map("user_id")
+  role     UserRole
+  score    Int      @default(0)
+  joinedAt DateTime @default(now()) @map("joined_at")
+  game     Game     @relation(fields: [gameId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([gameId, userId])
+  @@map("game_participants")
+}
+
+model Question {
+  id           String             @id @default(uuid())
+  gameId       String             @map("game_id")
+  questionText String             @map("question_text")
+  rewardType   QuestionRewardType @default(STANDARD) @map("reward_type")
+  isResolved   Boolean            @default(false) @map("is_resolved")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  options      QuestionOption[]
+  game         Game               @relation(fields: [gameId], references: [id])
+  answers      UserAnswer[]
+
+  @@map("questions")
+}
+
+model QuestionOption {
+  id             String       @id @default(uuid())
+  questionId     String       @map("question_id")
+  text           String       @map("text")
+  isCorrect      Boolean      @default(false) @map("is_correct")
+  linkedPlayerId String?      @map("linked_player_id")
+  question       Question     @relation(fields: [questionId], references: [id])
+  chosenByUsers  UserAnswer[]
+
+  @@map("question_options")
+}
+
+model UserAnswer {
+  id               String         @id @default(uuid())
+  userId           String         @map("user_id")
+  questionId       String         @map("question_id")
+  selectedOptionId String         @map("selected_option_id")
+  wager            Int            @default(0)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  question         Question       @relation(fields: [questionId], references: [id])
+  option           QuestionOption @relation(fields: [selectedOptionId], references: [id])
+  user             User           @relation(fields: [userId], references: [id])
+
+  @@unique([userId, questionId])
+  @@map("user_answers")
+}
+
+model UserPoint {
+  id            String       @id @default(uuid())
+  userId        String       @map("user_id")
+  pointType     PointType    @map("point_type")
+  amount        Int
+  receivedAt    DateTime     @default(now()) @map("received_at")
+  transactionId String?      @map("transaction_id")
+  gameId        String?      @map("game_id")
+  game          Game?        @relation(fields: [gameId], references: [id])
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  user          User         @relation(fields: [userId], references: [id])
+
+  @@map("user_points")
+}
+
+model Transaction {
+  id            String            @id @default(uuid())
+  userId        String            @map("user_id")
+  type          TransactionType
+  status        TransactionStatus @default(PENDING)
+  amount        Int
+  description   String?
+  failureReason String?           @map("failure_reason")
+  paymentMethod String?           @map("payment_method")
+  last4Digits   String?           @map("last_4_digits")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  user          User              @relation(fields: [userId], references: [id])
+  userPoints    UserPoint[]
+
+  @@map("transactions")
+}
+
+model ChatMessage {
+  id          String        @id @default(uuid())
+  senderId    String        @map("sender_id")
+  receiverId  String        @map("receiver_id")
+  messageText String        @map("message_text")
+  messageType MessageType   @map("message_type")
+  status      MessageStatus @default(SENT)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  receiver    User          @relation("Receiver", fields: [receiverId], references: [id])
+  sender      User          @relation("Sender", fields: [senderId], references: [id])
+
+  @@map("chat_messages")
+}
+
+model Notification {
+  id       String           @id @default(uuid())
+  userId   String           @map("user_id")
+  type     NotificationType
+  content  String
+  isRead   Boolean          @default(false) @map("is_read")
+  sendDate DateTime         @default(now()) @map("send_date")
+  readDate DateTime?        @map("read_date")
+  user     User             @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model ViewLog {
+  id                   String    @id @default(uuid())
+  userId               String    @map("user_id")
+  gameId               String    @map("game_id")
+  duration             Int
+  answersCount         Int       @map("answers_count")
+  participationPercent Float     @map("participation_percent")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  hostId               String    @map("host_id")
+  startedAt            DateTime? @map("started_at")
+  game                 Game      @relation(fields: [gameId], references: [id])
+  host                 User      @relation("HostLogs", fields: [hostId], references: [id])
+  user                 User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, hostId, duration])
+  @@map("view_logs")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  follower    User     @relation("following", fields: [followerId], references: [id])
+  following   User     @relation("followedBy", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
 
 enum UserRole {
   HOST
@@ -37,7 +263,7 @@ enum PointType {
   GAME
   DONATION
   BONUS
-  PURCHASE 
+  PURCHASE
 }
 
 enum TransactionType {
@@ -45,8 +271,8 @@ enum TransactionType {
   EARN
   SPEND
   TRANSFER
-  GIFT     // New: For drag & drop gifts
-  REFUND   // New: For returning wagers to winners
+  GIFT
+  REFUND
 }
 
 enum TransactionStatus {
@@ -76,286 +302,4 @@ enum NotificationType {
 enum QuestionRewardType {
   STANDARD
   WINNER_TAKES_ALL
-}
-
-// --- TABLES ---
-
-// 1. User Table
-model User {
-  id         String    @id @default(uuid())
-  username   String
-  email      String    @unique
-  password   String?   // Optional (for Social Login)
-  role       UserRole  @default(VIEWER)
-  
-  // Management & Status
-  isActive       Boolean   @default(true)
-  isVerified     Boolean   @default(false)
-  lastActiveAt   DateTime? @map("last_active_at")
-  
-  // Auth & Identity
-  phoneNumber    String?   @unique
-  firebaseId     String?   // For Push Notifications
-  googleId       String?   @unique
-  facebookId     String?   @unique
-
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  followedBy      Follow[]  @relation("followedBy") 
-  following       Follow[]  @relation("following")
-  hostLogs ViewLog[] @relation("HostLogs")
-  
-  creditCards    CreditCard[] 
-  hostedStreams  Stream[]  @relation("HostStreams")
-  hostedGames    Game[]    @relation("HostGames")
-  moderatedGames Game[]    @relation("ModeratorGames")
-  participations GameParticipant[]
-  points         UserPoint[]
-  transactions   Transaction[]
-  notifications  Notification[]
-  viewLogs       ViewLog[]
-  
-  sentMessages     ChatMessage[] @relation("Sender")
-  receivedMessages ChatMessage[] @relation("Receiver")
-  userAnswers      UserAnswer[]
-
-  @@map("users")
-}
-
-// 2. CreditCard Table
-model CreditCard {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  last4Digits String   @map("last_4_digits") 
-  token       String   // Payment provider token
-  cvv         String?  
-  expDate     String   @map("exp_date") // MM/YY
-  tz          String?  
-  isDeleted   Boolean  @default(false) @map("is_deleted")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@map("credit_cards")
-}
-
-// 3. Stream Table
-model Stream {
-  id        String       @id @default(uuid())
-  title     String
-  hostId    String       @map("host_id")
-  startTime DateTime?    @map("start_time")
-  endTime   DateTime?    @map("end_time")
-  status    StreamStatus @default(WAITING)
-lastPausedAt DateTime?    @map("last_paused_at")
-  host      User         @relation("HostStreams", fields: [hostId], references: [id])
-  games     Game[]
-  
-  @@map("streams")
-}
-
-// 4. Game Table
-model Game {
-  id          String   @id @default(uuid())
-  title       String
-  description String?  @db.Text
-  status      GameStatus @default(WAITING)  
-  
-  hostId      String   @map("host_id")
-  moderatorId String?  @map("moderator_id")
-  streamId    String   @map("stream_id")
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  startedAt  DateTime? @map("started_at")                // מתי הפך ל-ACTIVE (התחלה בפועל)
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  finishedAt  DateTime? @map("finished_at")
-
-  host      User    @relation("HostGames", fields: [hostId], references: [id])
-  moderator User?   @relation("ModeratorGames", fields: [moderatorId], references: [id])
-  stream    Stream  @relation(fields: [streamId], references: [id])
-
-  participants GameParticipant[]
-  questions    Question[]
-  viewLogs     ViewLog[]
-  userPoints   UserPoint[] 
-
-  @@map("games")
-}
-
-// 5. Game Participant Table
-model GameParticipant {
-  id       String   @id @default(uuid())
-  gameId   String   @map("game_id")
-  userId   String   @map("user_id")
-  role     UserRole
-  score    Int      @default(0)
-  joinedAt DateTime @default(now()) @map("joined_at")
-
-  game Game @relation(fields: [gameId], references: [id])
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([gameId, userId])
-  @@map("game_participants")
-}
-
-// 6. Question Table (Normalized)
-model Question {
-  id           String             @id @default(uuid())
-  gameId       String             @map("game_id") 
-  questionText String             @map("question_text")
-  
-  rewardType   QuestionRewardType @default(STANDARD) @map("reward_type")
-  isResolved   Boolean            @default(false) @map("is_resolved")
-  
-  createdAt    DateTime           @default(now()) @map("created_at")
-
-  game    Game             @relation(fields: [gameId], references: [id])
-  options QuestionOption[] 
-  answers UserAnswer[]     
-
-  @@map("questions")
-}
-
-// 7. Question Options Table (New)
-model QuestionOption {
-  id             String  @id @default(uuid())
-  questionId     String  @map("question_id")
-  text           String  @map("text")
-  isCorrect      Boolean @default(false) @map("is_correct")
-  
-  // Optional: Link option to a specific player (for 'Who will win' questions)
-  linkedPlayerId String? @map("linked_player_id") 
-
-  question       Question     @relation(fields: [questionId], references: [id])
-  chosenByUsers  UserAnswer[] 
-
-  @@map("question_options")
-}
-
-// 8. User Answer Table (Updated with Wager)
-model UserAnswer {
-  id               String   @id @default(uuid())
-  userId           String   @map("user_id")
-  questionId       String   @map("question_id")
-  
-  selectedOptionId String   @map("selected_option_id")
-  wager            Int      @default(0) // Amount of points bet
-  
-  createdAt        DateTime @default(now()) @map("created_at")
-
-  user     User           @relation(fields: [userId], references: [id])
-  question Question     @relation(fields: [questionId], references: [id])
-  option   QuestionOption @relation(fields: [selectedOptionId], references: [id])
-
-  @@unique([userId, questionId])
-  @@map("user_answers")
-
-
-}
-
-// 9. User Points Table
-model UserPoint {
-  id            String    @id @default(uuid())
-  userId        String    @map("user_id")
-  pointType     PointType @map("point_type")
-  amount        Int
-  receivedAt    DateTime  @default(now()) @map("received_at")
-
-  // Optional relations
-  transactionId String?   @map("transaction_id")
-  gameId        String?   @map("game_id")
-
-  user        User         @relation(fields: [userId], references: [id])
-  transaction Transaction? @relation(fields: [transactionId], references: [id])
-  game        Game?        @relation(fields: [gameId], references: [id])
-
-  @@map("user_points")
-}
-
-// 10. Transaction Table
-model Transaction {
-  id            String            @id @default(uuid())
-  userId        String            @map("user_id")
-  type          TransactionType
-  status        TransactionStatus @default(PENDING)
-  amount        Int
-  description   String?
-  failureReason String?           @map("failure_reason")
-  paymentMethod String?           @map("payment_method")
-  last4Digits   String?           @map("last_4_digits")
-  createdAt     DateTime          @default(now()) @map("created_at")
-
-  user       User        @relation(fields: [userId], references: [id])
-  userPoints UserPoint[]
-
-  @@map("transactions")
-}
-
-// 11. Chat Message Table
-model ChatMessage {
-  id          String        @id @default(uuid())
-  senderId    String        @map("sender_id")
-  receiverId  String        @map("receiver_id")
-  messageText String        @map("message_text")
-  messageType MessageType   @map("message_type")
-  status      MessageStatus @default(SENT)
-  createdAt   DateTime      @default(now()) @map("created_at")
-
-  sender   User @relation("Sender", fields: [senderId], references: [id])
-  receiver User @relation("Receiver", fields: [receiverId], references: [id])
-
-  @@map("chat_messages")
-}
-
-// 12. Notification Table
-model Notification {
-  id        String           @id @default(uuid())
-  userId    String           @map("user_id")
-  type      NotificationType
-  content   String
-  isRead    Boolean          @default(false) @map("is_read")
-  sendDate  DateTime         @default(now()) @map("send_date")
-  readDate  DateTime?        @map("read_date")
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@map("notifications")
-}
-
-// 13. ViewLog Table (Analytics & Interest Signal)
-model ViewLog {
-  id                    String    @id @default(uuid())
-  userId                String    @map("user_id")      // The viewer
-  gameId                String    @map("game_id")      // The specific game
-  hostId                String    @map("host_id")      // <--- Adding this field is critical for the feed
-  startedAt  DateTime? @map("started_at")
-  duration              Int       // Seconds
-  answersCount          Int       @map("answers_count")
-  participationPercent  Float     @map("participation_percent")
-  
-  createdAt             DateTime  @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id])
-  game Game @relation(fields: [gameId], references: [id])
-  host User @relation("HostLogs", fields: [hostId], references: [id]) // Relation to the creator
-
-  // Smart index: allows fast retrieval by user + duration + host
-  @@index([userId, hostId, duration]) 
-  @@map("view_logs")
-}
-
-// 14. Follow Table 
-model Follow {
-  id          String   @id @default(uuid())
-  followerId  String   @map("follower_id")
-  followingId String   @map("following_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  follower    User     @relation("following", fields: [followerId], references: [id])
-  following   User     @relation("followedBy", fields: [followingId], references: [id])
-
-  @@unique([followerId, followingId]) 
-  @@map("follows")
 }
