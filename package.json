@@ -7,6 +7,32 @@
   "scripts": {
     "dev:server": "npm run dev --workspace=@worldplay/server",
     "dev:media": "npm run dev --workspace=@worldplay/media-server",
-    "build:shared": "npm run build --workspace=@worldplay/shared"
-  }
+    "build:shared": "npm run build --workspace=@worldplay/shared",
+    
+     "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:rebuild": "docker compose up --build",
+    
+    "studio": "prisma studio --port 5556 --browser none --hostname 0.0.0.0",
+    "migrate": "docker exec -it world-play-monorepo-app-server-1 npx prisma migrate dev",
+    "db:push": "docker exec -it world-play-monorepo-app-server-1 npx prisma db push",
+    "db:seed": "docker exec -it world-play-monorepo-app-server-1 npx prisma db seed",
+    
+    "logs:app": "docker compose logs app-server -f",
+    "logs:media": "docker compose logs media-server -f",
+    "logs:db": "docker compose logs db -f"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4"
+  },
+  "lint-staged": {
+  "packages/**/*.{js,jsx,ts,tsx}": [
+    "eslint --fix",
+    "prettier --write"
+  ]
+}
 }

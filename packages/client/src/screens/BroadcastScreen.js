@@ -7,8 +7,8 @@ export default function BroadcastScreen() {
   const [stream, setStream] = useState(null);
   const [status, setStatus] = useState('מוכן לשידור');
   const [isLive, setIsLive] = useState(false);
+  const [currentStreamId, setCurrentStreamId] = useState(null); // הוספנו סטייט ל-ID מהשרת
   const videoRef = useRef(null);
-  const STREAM_ID = "67e97530-30a9-49d1-8261-dac5f9664157";
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -16,34 +16,52 @@ export default function BroadcastScreen() {
     }
   }, [stream]);
 
-  // עצירת שידור מסודרת
-  const stopStream = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+  // עצירת שידור מתוקנת
+  const stopStream = async () => {
+    try {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      
+      // משתמשים ב-ID שקיבלנו מהשרת בזמן היצירה
+      if (currentStreamId) {
+        socket.emit('stream:stop_broadcast', { streamId: currentStreamId });
+      }
+
+      setStream(null);
+      setIsLive(false);
+      setCurrentStreamId(null);
+      setStatus('השידור הופסק');
+      console.log('🔴 השידור הופסק בהצלחה');
+    } catch (err) {
+      console.error('שגיאה בעצירת השידור:', err);
     }
-    socket.emit('stream:stop_broadcast', { streamId: STREAM_ID });
-    setStream(null);
-    setIsLive(false);
-    setStatus('השידור הופסק');
-    console.log('🔴 השידור הופסק והמצלמה כבויה');
   };
 
   const startStream = async () => {
     try {
+      setStatus('מבקש מהשרת אישור לשידור...');
+      
+      // שלב 1: השרת יוצר את הסטרים ב-DB ומחזיר לנו ID אמיתי
+      const response = await emitPromise('stream:init_broadcast', {});
+      const streamIdFromServer = response.streamId; 
+      setCurrentStreamId(streamIdFromServer);
+
       setStatus('מבקש גישה למצלמה...');
       const media = await navigator.mediaDevices.getUserMedia({ 
         video: { width: { ideal: 1280 }, height: { ideal: 720 } }, 
         audio: true 
       });
-
       setStream(media);
-      setStatus('יוצר חדר בשרת...');
-      const roomData = await emitPromise('stream:create_room', { streamId: STREAM_ID });
+
+      setStatus('מקים חדר בשרת המדיה...');
+      // שלב 2: משתמשים ב-ID שהשרת יצר עבורנו
+      const roomData = await emitPromise('stream:create_room', { streamId: streamIdFromServer });
       
       await MediasoupManager.initDevice(roomData.rtpCapabilities);
       
       setStatus('מקים טרנספורט...');
-      const transport = await MediasoupManager.createTransport(socket, 'send', STREAM_ID);
+      const transport = await MediasoupManager.createTransport(socket, 'send', streamIdFromServer);
       
       setStatus('מתחיל הזרמה...');
       await transport.produce({ track: media.getVideoTracks()[0] });
@@ -51,6 +69,7 @@ export default function BroadcastScreen() {
 
       setIsLive(true);
       setStatus('LIVE 🔴');
+      console.log('✅ שידור חי פעיל עם ID:', streamIdFromServer);
     } catch (err) {
       console.error('❌ שגיאה בשידור:', err);
       setStatus('שגיאה: ' + err.message);
@@ -75,7 +94,7 @@ export default function BroadcastScreen() {
           />
         ) : (
           <View style={styles.placeholder}>
-            <Text style={{color: '#666'}}>המצלמה כבויה</Text>
+            <Text style={{color: '#666'}}>המצלמה כבויה - לחצי על התחל</Text>
           </View>
         )}
       </View>

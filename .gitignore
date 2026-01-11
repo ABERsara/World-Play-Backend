@@ -1,29 +1,26 @@
 # Dependencies
 node_modules/
-yarn.lock
+packages/*/node_modules/
 
-# Environment Variables
+# Security & Environment
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+prompt.txt
 
-# Build Outputs
+# Databases
+packages/server/prisma/*.db
+packages/server/prisma/*.db-journal
+
+# Build & Logs
 dist/
 build/
-coverage/
+web-build/
+.expo/
+*.log
+npm-debug.log*
 
-# IDE & System
+# System & IDE
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-*.swp
-*.log
-npm-debug.log*
-*.txt
-
-# Framework specifics
-.expo/
-web-build/

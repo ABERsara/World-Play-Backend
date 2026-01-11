@@ -20,7 +20,35 @@ export const registerStreamHandlers = (io, socket) => {
   if (user) {
     logger.info(`👤 Socket connected: ${user.username} (${user.id})`);
   }
+socket.on('stream:init_broadcast', async (data, callback) => {
+    try {
+        logger.info(`Initiating broadcast for user: ${user.id}`);
 
+        // קריאה לשרת ה-API הראשי (app-server זה השם בתוך ה-Docker)
+        const response = await fetch('http://app-server:8080/api/streams', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                // אנחנו מעבירים את ה-Token כדי שה-App Server ידע מי המשתמש
+                'Authorization': `Bearer ${socket.handshake.auth.token}` 
+            },
+            body: JSON.stringify({ title: data.title || "שידור חדש" })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to create stream in DB');
+        }
+
+        logger.info(`✅ Stream created successfully: ${result.stream.id}`);
+        callback({ streamId: result.stream.id });
+
+    } catch (error) {
+        logger.error(`❌ Failed to init broadcast: ${error.message}`);
+        callback({ error: error.message });
+    }
+});
   // --- 1. יצירת חדר (עבור הסטרים) ---
   socket.on('stream:create_room', async ({ streamId }, callback) => {
     try {
@@ -219,12 +247,11 @@ export const registerStreamHandlers = (io, socket) => {
         }
     });
 
-    // הוספת אירוע עצירה ידני (למקרה שהמשתמש לוחץ על כפתור "Stop")
     socket.on('stream:stop_broadcast', async ({ streamId }) => {
-        if (streams[streamId]?.hostSocketId === socket.id) {
-            await handleCloseStream(streamId, io);
-        }
-    });
+    logger.info(`Stopping broadcast for stream: ${streamId}`);
+    await handleCloseStream(streamId, io); // הפונקציה שמעדכנת ל-ENDED
+});
+
 };
 
 // 1. פונקציית עזר לניקוי (מחוץ ל-registerStreamHandlers)
@@ -243,9 +270,9 @@ export const handleCloseStream = async (streamId, io) => {
     try {
         await prisma.stream.update({
             where: { id: streamId },
-            data: { status: 'ENDED', endTime: new Date() }
+            data: { status: 'FINISHED', endTime: new Date() }
         });
-        logger.info(`✅ DB Updated: Stream ${streamId} set to ENDED`);
+        logger.info(`✅ DB Updated: Stream ${streamId} set to FINISHED`);
     } catch (err) {
         logger.error(`⚠️ DB Close Error: ${err.message}`);
     }

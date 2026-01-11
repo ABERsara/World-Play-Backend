@@ -1,7 +1,3 @@
-
-// app.get('/', (req, res) => {
-//   res.send('Live Game Streaming Backend is Running!');
-// });
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
@@ -17,7 +13,7 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import chatRoutes from './routes/chat.router.js';
 import notificationRoutes from './routes/notification.routes.js';
 import configRoutes from './routes/config.routes.js';
-import statusRoutes from './routes/status.routes.js'; // הראוטר שמחזיר הודעת "Running"
+import statusRoutes from './routes/status.routes.js';
 import corsOptions from './config/corsOptions.js';
 import { initializeSocketIO } from './services/socket.service.js';
 
@@ -28,7 +24,10 @@ const PORT = process.env.PORT || 2081;
 
 // --- Middleware ---
 app.use(express.json());
-app.use(cors(corsOptions));
+app.use(cors({
+  origin: '*', // לזמן הפיתוח, כדי לשלול חסימות
+  credentials: true
+}));
 
 // --- Routes ---
 app.use('/', statusRoutes); // דף הבית של ה-API
@@ -44,12 +43,17 @@ app.use('/api/chat', chatRoutes);
 
 // --- Functions ---
 async function checkMediaServer() {
-  try {
-    const response = await axios.get('http://media-server:8000/'); 
-    console.log('🔗 [BACKEND-TO-MEDIA] Connection successful:', response.data.status);
-  } catch (error) {
-    console.log('⚠️ [BACKEND-TO-MEDIA] Warning: Media server unreachable');
-  }
+    let connected = false;
+    while (!connected) {
+        try {
+            const response = await axios.get('http://media-server:8000/'); 
+            console.log('🔗 [BACKEND-TO-MEDIA] Connection successful:', response.data.status);
+            connected = true;
+        } catch (error) {
+            console.log('⏳ [BACKEND-TO-MEDIA] Waiting for media server...');
+            await new Promise(resolve => setTimeout(resolve, 3000)); // מחכה 3 שניות לפני ניסיון חוזר
+        }
+    }
 }
 
 // --- Startup ---

@@ -1,38 +1,62 @@
-# version: '3.8'
-
 services:
   db:
-    image: postgres:15
-    restart: always
+    image: postgres:15-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: user        
-      POSTGRES_PASSWORD: password 
-      POSTGRES_DB: worldplaydb  
+      POSTGRES_DB: worldplaydb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d worldplaydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   app-server:
     build:
       context: .
       dockerfile: packages/server/Dockerfile
+    restart: unless-stopped
     env_file: .env
     ports:
       - "8080:8080"
-      - "5555:5555"
+      - "5556:5556"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
-      - db
+    depends_on:
+      db:
+        condition: service_healthy
 
   media-server:
     build:
       context: .
       dockerfile: packages/media-server/Dockerfile
+    restart: unless-stopped
     env_file: .env
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      - ANNOUNCED_IP=${ANNOUNCED_IP:-192.168.56.1}
     ports:
       - "8000:8000"
       - "10000-10100:10000-10100/udp"
       - "10000-10100:10000-10100/tcp"
     depends_on:
+      db:
+        condition: service_healthy
+
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile
+    command: npx prisma studio --port 5556 --browser none --hostname 0.0.0.0
+    ports:
+      - "5557:5556"
+    env_file: .env
+    depends_on:
       - db
+volumes:
+  postgres_data:

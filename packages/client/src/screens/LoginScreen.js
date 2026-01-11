@@ -13,6 +13,7 @@ export default function LoginScreen({ onLoginSuccess }) {
       // data.user מכיל כעת את ה-role (HOST או VIEWER)
       onLoginSuccess(data.user); 
     } catch (error) {
+      console.error('Login error:', error);
       alert('שגיאת התחברות: ' + error.message);
     }
   };

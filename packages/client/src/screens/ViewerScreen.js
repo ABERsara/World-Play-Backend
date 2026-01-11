@@ -1,125 +1,124 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Button } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Button, TextInput } from 'react-native';
 import { socket, connectSocket, emitPromise } from '../services/socket.service';
 import { MediasoupManager } from '../services/MediasoupManager';
 
 export default function ViewerScreen() {
   const [remoteStream, setRemoteStream] = useState(null);
-  const [status, setStatus] = useState('מתחבר...');
   const [hasInteracted, setHasInteracted] = useState(false);
+  const [status, setStatus] = useState('ממתין להזנת מזהה שידור...');
+  const [streamIdInput, setStreamIdInput] = useState(""); 
   const videoRef = useRef(null);
-  const STREAM_ID = "67e97530-30a9-49d1-8261-dac5f9664157";
 
-  const startPlayback = async () => {
-    setHasInteracted(true);
-    setTimeout(async () => {
-      if (videoRef.current && remoteStream) {
-        videoRef.current.srcObject = remoteStream;
-        try { await videoRef.current.play(); } catch (e) { console.log("Playback error:", e); }
-      }
-    }, 200);
-  };
-
-  useEffect(() => {
-    if (videoRef.current && remoteStream && hasInteracted) {
-      videoRef.current.srcObject = remoteStream;
-    }
-  }, [remoteStream, hasInteracted]);
-
+  // 1. האזנה לאירועי סוקט (פעם אחת בלבד בטעינה)
   useEffect(() => {
     const activeSocket = socket || connectSocket();
 
-    const initViewer = async () => {
-      try {
-        setStatus('מצטרף לחדר...');
-        const data = await emitPromise('stream:join', { streamId: STREAM_ID });
-        await MediasoupManager.initDevice(data.rtpCapabilities);
-        
-        if (data.producers && data.producers.length > 0) {
-          data.producers.forEach(pId => consume(pId));
-        } else {
-          setStatus('ממתין לשידור...');
-        }
-      } catch (err) {
-        setStatus('שגיאה בחיבור');
-      }
-    };
-
-    // האזנה לשידור חדש
-    activeSocket.off('stream:new_producer');
     activeSocket.on('stream:new_producer', ({ producerId }) => {
-      consume(producerId);
+      console.log("New producer detected:", producerId);
+      consume(producerId, streamIdInput);
     });
 
-    // האזנה לסגירת שידור
-    activeSocket.off('stream:closed');
     activeSocket.on('stream:closed', () => {
-      console.log('🛑 המארח סגר את השידור');
       setRemoteStream(null);
-      setStatus('השידור הופסק');
+      setStatus('השידור הופסק על ידי המארח');
     });
-
-    initViewer();
 
     return () => {
       activeSocket.off('stream:new_producer');
       activeSocket.off('stream:closed');
     };
-  }, []);
+  }, [streamIdInput]);
 
-  const consume = async (producerId) => {
+  // 2. פונקציית הצטרפות (מופעלת בלחיצת כפתור)
+  const handleJoinPress = async () => {
+    if (!streamIdInput) return alert("אנא הזיני ID");
+    
+    try {
+      setStatus('מצטרף לשידור...');
+      setHasInteracted(true);
+
+      const data = await emitPromise('stream:join', { streamId: streamIdInput });
+      await MediasoupManager.initDevice(data.rtpCapabilities);
+      
+      if (data.currentProducerId) {
+        await consume(data.currentProducerId, streamIdInput);
+      } else {
+        setStatus('מחובר. ממתין שהמארח יתחיל להזרים...');
+      }
+    } catch (err) {
+      console.error("Join error:", err);
+      setStatus('שגיאה: ' + err.message);
+    }
+  };
+
+  // 3. פונקציית צריכת וידאו (Consume)
+  const consume = async (producerId, targetId) => {
     try {
       const caps = MediasoupManager.getRtpCapabilities();
-      const transport = await MediasoupManager.createTransport(socket, 'recv', STREAM_ID);
+      const transport = await MediasoupManager.createTransport(socket, 'recv', targetId);
+      
       const consumeData = await emitPromise('stream:consume', {
-        transportId: transport.id, producerId, rtpCapabilities: caps, streamId: STREAM_ID
+        transportId: transport.id,
+        producerId,
+        rtpCapabilities: caps,
+        streamId: targetId
       });
 
       const consumer = await transport.consume(consumeData);
-      setRemoteStream(prev => {
-        const stream = prev || new MediaStream();
-        if (!stream.getTracks().find(t => t.id === consumer.track.id)) {
-          stream.addTrack(consumer.track);
-        }
-        return new MediaStream(stream.getTracks());
-      });
+      const newStream = new MediaStream([consumer.track]);
+      
+      setRemoteStream(newStream);
       setStatus('שידור חי 🔴');
-      await emitPromise('stream:resume', { consumerId: consumer.id, streamId: STREAM_ID });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+      }
+
+      await emitPromise('stream:resume', { consumerId: consumer.id, streamId: targetId });
     } catch (err) {
       console.error('❌ Consume error:', err);
+      setStatus('שגיאה בקבלת הוידאו');
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>צופה בשידור</Text>
-      <View style={styles.videoBox}>
-        {!hasInteracted ? (
-          <View style={styles.interactContainer}>
-            <Text style={styles.statusText}>השידור זמין</Text>
-            <Button title="לחצי לצפייה בשידור" onPress={startPlayback} />
-          </View>
-        ) : (
-          <>
-            {remoteStream ? (
-              <video ref={videoRef} autoPlay playsInline style={styles.video} />
-            ) : (
-              <Text style={styles.statusText}>{status}</Text>
-            )}
-          </>
-        )}
-      </View>
+      
+      {!hasInteracted ? (
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="הזיני Stream ID כאן"
+            placeholderTextColor="#888"
+            value={streamIdInput}
+            onChangeText={setStreamIdInput}
+          />
+          <Button title="התחברי לשידור" onPress={handleJoinPress} color="#ff4757" />
+        </View>
+      ) : (
+        <View style={styles.videoBox}>
+          {remoteStream ? (
+            <video ref={videoRef} autoPlay playsInline style={styles.video} />
+          ) : (
+            <Text style={styles.statusText}>{status}</Text>
+          )}
+        </View>
+      )}
+      
       <Text style={styles.statusBadge}>{status}</Text>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#fff', fontSize: 22, marginBottom: 20, fontWeight: 'bold' },
-  videoBox: { width: '90%', aspectRatio: 16/9, backgroundColor: '#000', borderRadius: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  title: { color: '#fff', fontSize: 22, marginBottom: 30, fontWeight: 'bold' },
+  inputContainer: { width: '100%', alignItems: 'center' },
+  input: { backgroundColor: '#fff', width: '90%', padding: 15, borderRadius: 8, marginBottom: 20, textAlign: 'center' },
+  videoBox: { width: '100%', aspectRatio: 16/9, backgroundColor: '#000', borderRadius: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
   video: { width: '100%', height: '100%', objectFit: 'contain' },
-  statusText: { color: '#aaa', marginBottom: 10 },
-  statusBadge: { color: '#ffa502', marginTop: 15 },
-  interactContainer: { alignItems: 'center' }
+  statusText: { color: '#aaa' },
+  statusBadge: { color: '#ffa502', marginTop: 20 }
 });

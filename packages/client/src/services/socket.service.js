@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 import { authService } from './auth.service';
 
-const SOCKET_URL = "http://localhost:8080"; 
+const SOCKET_URL = "http://192.168.56.1:8000"; 
 export let socket = null;
 
 export const connectSocket = () => {

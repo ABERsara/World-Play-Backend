@@ -1,8 +1,8 @@
 // src/services/auth.service.js
 
 // שנה לכתובת ה-IP של השרת שלך אם את בודקת ממכשיר פיזי (למשל: 192.168.1.10)
-const API_URL = 'http://localhost:8080/api/users';
-
+const API_URL = 'http://192.168.56.1:8080/api/users';
+// http://localhost:8080/api/users לשנות חזרה ל-localhost אם את בודקת באמולטור
 export const authService = {
   login: async (email, password) => {
     try {
