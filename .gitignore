@@ -1,9 +1,19 @@
 # Dependencies
 node_modules/
 packages/*/node_modules/
+packages/*/node_modules/
 
 # Security & Environment
+# Security & Environment
 .env
+.env.*
+prompt.txt
+
+# Databases
+packages/server/prisma/*.db
+packages/server/prisma/*.db-journal
+
+# Build & Logs
 .env.*
 prompt.txt
 
@@ -18,7 +28,12 @@ web-build/
 .expo/
 *.log
 npm-debug.log*
+web-build/
+.expo/
+*.log
+npm-debug.log*
 
+# System & IDE
 # System & IDE
 .vscode/
 .idea/
