@@ -1,17 +1,17 @@
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
+
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import streamRoutes from './src/routes/streamRoutes.js';
+import { StreamService } from './src/services/streamService.js';
 import { logger } from './src/utils/logger.js';
 import { socketAuth } from './src/middleware/socketAuth.js';
 import { createWorkers } from './src/services/mediasoup.service.js';
 import { registerStreamHandlers } from './src/sockets/stream.handler.js';
 import { spawn } from 'child_process';
-import path from 'path';
 
 dotenv.config();
-const prisma = new PrismaClient();
 const app = express();
 const httpServer = http.createServer(app);
 const PORT = process.env.MEDIA_PORT || 8000;
@@ -35,38 +35,20 @@ io.on('connection', (socket) => {
     });
 });
 
-// Endpoint ל-FFmpeg (הפרדה ל-Process נפרד)
-app.post('/live/:streamId', (req, res) => {
-    const { streamId } = req.params;
-    logger.system(`FFMPEG: Starting process for stream ${streamId}`);
-    
-    const ffmpeg = spawn('ffmpeg', [
-        '-i', 'pipe:0', '-c:v', 'libx264', '-preset', 'veryfast',
-        '-f', 'hls', '-hls_time', '2', '-hls_list_size', '5',
-        '-hls_flags', 'delete_segments', `public/temp/${streamId}/index.m3u8`
-    ]);
+// חשוב: לאפשר JSON לפני הראוטים
+app.use(express.json());
 
-    req.pipe(ffmpeg.stdin);
-    ffmpeg.on('close', () => logger.info(`FFMPEG: Process closed for ${streamId}`));
-});
-
-const startServer = async () => {
-    try {
-        await createWorkers();
-        logger.success('Mediasoup Workers Initialized');
-        
-        httpServer.listen(PORT, () => {
-            logger.system(`Media Server is running on http://127.0.0.1:${PORT}`);
-        });
-    } catch (err) {
-        logger.error('Failed to start Media Server', err);
-    }
-};
-// לוגר פשוט - כל בקשה שתגיע תודפס בטרמינל
+// תיעוד בקשות נכנסות (Logging Middleware)
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] 🔍 Request: ${req.method} ${req.url} from ${req.ip}`);
   next();
 });
+
+// הגשת קבצים סטטיים של HLS
+app.use('/hls', express.static(StreamService.getTempDir()));
+
+// חיבור הראוטר (שימי לב לנתיב /live)
+app.use('/live', streamRoutes);
 
 // הודעת הברכה בנתיב הראשי
 app.get('/', (req, res) => {
@@ -77,4 +59,19 @@ app.get('/', (req, res) => {
     service: "media-server"
   });
 });
+
+// פונקציית אתחול השרת
+const startServer = async () => {
+    try {
+        await createWorkers();
+        logger.success('Mediasoup Workers Initialized');
+        
+        httpServer.listen(PORT, '0.0.0.0', () => {
+            logger.system(`Media Server is running on http://127.0.0.1:${PORT}`);
+        });
+    } catch (err) {
+        logger.error('Failed to start Media Server', err);
+    }
+};
+
 startServer();
