@@ -46,3 +46,7 @@ test.sh
 # Media files
 *.mp4
 packages/media-server/*.mp4
+video.mp4
+*video.mp4
+packages/media-server/video.mp4
+
