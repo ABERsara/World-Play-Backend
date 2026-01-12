@@ -29,6 +29,7 @@ app.use(cors({
   credentials: true
 }));
 
+
 // --- Routes ---
 app.use('/', statusRoutes); // דף הבית של ה-API
 app.use('/api/config', configRoutes); // קונפיגורציית המדיה
