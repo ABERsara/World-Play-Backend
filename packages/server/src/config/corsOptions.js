@@ -1,11 +1,11 @@
 const whitelist = [
-    'http://localhost:3000',     // Node.js client
-    'http://localhost:8081',      // Web client
-    'http://localhost:19006',     // Expo web
-    'http://192.168.56.1:8081',   // המחשב שלך ברשת
-    'exp://192.168.56.1:8081',    // Expo Go
-  ];
-  
+  'http://localhost:3000', // Node.js client
+  'http://localhost:8081', // Web client
+  'http://localhost:19006', // Expo web
+  'http://192.168.56.1:8081', // המחשב שלך ברשת
+  'exp://192.168.56.1:8081', // Expo Go
+];
+
 const corsOptions = {
   origin: (origin, callback) => {
     if (whitelist.indexOf(origin) !== -1 || !origin) {

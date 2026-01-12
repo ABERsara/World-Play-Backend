@@ -24,11 +24,12 @@ const PORT = process.env.PORT || 2081;
 
 // --- Middleware ---
 app.use(express.json());
-app.use(cors({
-  origin: '*', // לזמן הפיתוח, כדי לשלול חסימות
-  credentials: true
-}));
-
+app.use(
+  cors({
+    origin: '*', // לזמן הפיתוח, כדי לשלול חסימות
+    credentials: true,
+  })
+);
 
 // --- Routes ---
 app.use('/', statusRoutes); // דף הבית של ה-API
@@ -44,17 +45,23 @@ app.use('/api/chat', chatRoutes);
 
 // --- Functions ---
 async function checkMediaServer() {
-    let connected = false;
-    while (!connected) {
-        try {
-            const response = await axios.get('http://media-server:8000/'); 
-            console.log('🔗 [BACKEND-TO-MEDIA] Connection successful:', response.data.status);
-            connected = true;
-        } catch (error) {
-            console.log('⏳ [BACKEND-TO-MEDIA] Waiting for media server...', error.message);
-            await new Promise(resolve => setTimeout(resolve, 3000)); // מחכה 3 שניות לפני ניסיון חוזר
-        }
+  let connected = false;
+  while (!connected) {
+    try {
+      const response = await axios.get('http://media-server:8000/');
+      console.log(
+        '[BACKEND-TO-MEDIA] Connection successful:',
+        response.data.status
+      );
+      connected = true;
+    } catch (error) {
+      console.log(
+        '[BACKEND-TO-MEDIA] Waiting for media server...',
+        error.message
+      );
+      await new Promise((resolve) => setTimeout(resolve, 3000)); // מחכה 3 שניות לפני ניסיון חוזר
     }
+  }
 }
 
 // --- Startup ---
@@ -62,6 +69,6 @@ const io = initializeSocketIO(server);
 app.set('io', io);
 
 server.listen(PORT, async () => {
-    console.log(`✅ Main Server running on port ${PORT}`);
-    await checkMediaServer();
+  console.log(`✅ Main Server running on port ${PORT}`);
+  await checkMediaServer();
 });

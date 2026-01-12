@@ -4,9 +4,10 @@ const router = express.Router();
 
 router.get('/', (req, res) => {
   res.json({
-    status: "online",
-    message: "🎮 World-Play MAIN API is Running!",
-    timestamp: new Date().toISOString()
+    status: 'online',
+    message: '🎮 World-Play MAIN API is Running!',
+    timestamp: new Date().toISOString(),
   });
 });
+
 export default router;
