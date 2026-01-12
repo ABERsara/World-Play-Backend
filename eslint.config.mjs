@@ -12,6 +12,7 @@ export default [
       '**/build/**',
       '*.json',
       '*.md',
+      'eslint.config.mjs',
     ],
   },
   {
