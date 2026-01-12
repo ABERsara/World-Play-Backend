@@ -4,7 +4,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export const socketAuth = async (socket, next) => {
-  console.log('🔒 AUTH: New socket connection attempt...'); // בדיקה 1
+  console.log('🔒 AUTH: New socket connection attempt...');
+  // בדיקה 1
 
   // 1. קבלת הטוקן
   const token = socket.handshake.auth.token || socket.handshake.headers.token;
