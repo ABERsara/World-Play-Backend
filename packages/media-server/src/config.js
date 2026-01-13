@@ -7,8 +7,8 @@ export const config = {
     numWorkers: Object.keys(os.cpus()).length,
     
     worker: {
-      rtcMinPort: 10000,
-      rtcMaxPort: 10100,
+rtcMinPort: 11000,
+  rtcMaxPort: 11100,
       logLevel: 'warn',
       logTags: ['info', 'ice', 'dtls', 'rtp', 'srtp', 'rtcp'],
     },

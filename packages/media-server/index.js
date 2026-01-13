@@ -67,7 +67,7 @@ const startServer = async () => {
         logger.success('Mediasoup Workers Initialized');
         
         httpServer.listen(PORT, '0.0.0.0', () => {
-            logger.system(`Media Server is running on http://127.0.0.1:${PORT}`);
+            logger.system(`Media Server is running on http://0.0.0.0:${PORT}`);
         });
     } catch (err) {
         logger.error('Failed to start Media Server', err);
