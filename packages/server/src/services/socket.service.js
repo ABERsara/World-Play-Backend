@@ -1,19 +1,19 @@
+// packages/server/src/services/socket.service.js
+
 import { Server } from 'socket.io';
 import { socketAuth } from '../middleware/socketAuth.js';
 import { logger } from '../utils/logger.js';
 import { registerGameHandlers } from '../sockets/game.handler.js';
-// packages/server/src/services/socket.service.js
 
 export const initializeSocketIO = (httpServer) => {
   console.log('socket.service.js -> STARTING INIT');
-
   const io = new Server(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
   });
 
   console.log('socket.service.js -> IO Created');
 
-  io.use(socketAuth); 
+  io.use(socketAuth);
 
   io.on('connection', (socket) => {
     console.log('socket.service.js -> NEW CONNECTION:', socket.id);

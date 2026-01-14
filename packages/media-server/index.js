@@ -1,8 +1,9 @@
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
-
 import dotenv from 'dotenv';
+
+// תיקון הנתיבים כאן:
 import streamRoutes from './src/routes/stream.routes.js';
 import { StreamService } from './src/services/stream.service.js';
 import { logger } from './src/utils/logger.js';
@@ -52,23 +53,23 @@ app.use('/live', streamRoutes);
 app.get('/', (req, res) => {
   res.json({
     status: 'online',
-    message: '🚀 World-Play Media Server is Live and Running!',
+    message: 'World-Play Media Server is Live and Running!',
     timestamp: new Date().toISOString(),
     service: 'media-server',
   });
 });
 
 const startServer = async () => {
-    try {
-        await createWorkers();
-        logger.success('Mediasoup Workers Initialized');
-        
-        httpServer.listen(PORT, '0.0.0.0', () => {
-            logger.system(`Media Server is running on http://0.0.0.0:${PORT}`);
-        });
-    } catch (err) {
-        logger.error('Failed to start Media Server', err);
-    }
+  try {
+    await createWorkers();
+    logger.success('Mediasoup Workers Initialized');
+
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      logger.system(`Media Server is running on http://0.0.0.0:${PORT}`);
+    });
+  } catch (err) {
+    logger.error('Failed to start Media Server', err);
+  }
 };
 
 startServer();
