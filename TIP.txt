@@ -173,6 +173,8 @@ docker exec -it world-play-monorepo-app-server-1 npx prisma migrate reset
 
 # טען נתוני seed (אם יש קובץ seed)
 docker exec -it world-play-monorepo-app-server-1 npx prisma db seed
+# פותח את פריזמה לצפייה בדפדפן
+docker exec -it world-play-backend-app-server-1 npx prisma studio
 ```
 
 ---
