@@ -5,7 +5,6 @@ const prisma = new PrismaClient();
 
 export const socketAuth = async (socket, next) => {
   console.log('🔒 AUTH: New socket connection attempt...');
-  // בדיקה 1
 
   // 1. קבלת הטוקן
   const token = socket.handshake.auth.token || socket.handshake.headers.token;
@@ -21,7 +20,7 @@ export const socketAuth = async (socket, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log('🔒 AUTH: Token valid, User ID:', decoded.id);
 
-    // 3. שליפה מה-DB (כאן כנראה הבעיה!)
+    // 3. שליפה מה-DB
     console.log('🔒 AUTH: Searching user in DB...');
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
@@ -42,7 +41,7 @@ export const socketAuth = async (socket, next) => {
     socket.user = user;
     next();
   } catch (err) {
-    console.log('❌ AUTH ERROR:', err.message); // זה ידפיס אם ה-DB לא זמין
+    console.log('❌ AUTH ERROR:', err.message); // השימוש ב-err.message הוא קריטי
     return next(new Error('Not authorized: Invalid token'));
   }
 };
