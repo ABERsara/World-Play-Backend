@@ -1,7 +1,6 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import fetch from 'node-fetch'; // ודאי שהספרייה מותקנת ב-media-server
 
 const TEMP_DIR = '/usr/src/app/packages/media-server/media_files';
 const activeStreams = new Map();
@@ -14,27 +13,20 @@ export const StreamService = {
   getActiveStreams: () => activeStreams,
   getTempDir: () => TEMP_DIR,
 
-  // פונקציית עזר לעדכון הבאקנד
   async notifyBackend(streamId, status) {
     try {
-      const response = await fetch(
+      await fetch(
         'http://app-server:8080/api/streams/update-status-from-server',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ streamId, status }),
+          signal: AbortSignal.timeout(2000),
         }
       );
-      if (response.ok) {
-        console.log(`📡 Backend updated: ${streamId} is ${status}`);
-      } else {
-        console.error(`⚠️ Backend returned error for ${streamId}`);
-      }
+      console.log(`✅ Backend notified: ${streamId} -> ${status}`);
     } catch (err) {
-      console.error(
-        `❌ Failed to notify Backend for ${streamId}:`,
-        err.message
-      );
+      console.warn(`⚠️ Backend notification failed: ${err.message}`);
     }
   },
 
@@ -44,80 +36,93 @@ export const StreamService = {
     }
 
     const streamPath = path.join(TEMP_DIR, streamId);
+
     if (!fs.existsSync(streamPath)) {
       fs.mkdirSync(streamPath, { recursive: true });
     }
 
-    console.log(`🎬 Creating files in: ${streamPath}`);
+    console.log(`🎬 Starting stream: ${streamId}`);
+    console.log(`📁 Output directory: ${streamPath}`);
 
+    // FFmpeg לקבלת Stream ויצירת HLS
     const ffmpeg = spawn('ffmpeg', [
       '-i',
-      'pipe:0',
+      'pipe:0', // קלט מ-HTTP stream
       '-c:v',
-      'libx264',
+      'libx264', // קידוד H.264
       '-preset',
       'ultrafast',
       '-tune',
       'zerolatency',
       '-c:a',
-      'aac',
+      'aac', // קידוד AAC
       '-f',
-      'hls',
+      'hls', // פלט HLS
       '-hls_time',
-      '2',
+      '2', // 2 שניות לכל segment
       '-hls_list_size',
-      '5',
+      '5', // 5 segments בפלייליסט
       '-hls_flags',
-      'append_list',
+      'delete_segments+append_list',
       '-hls_segment_filename',
       path.join(streamPath, 'segment%03d.ts'),
       path.join(streamPath, 'index.m3u8'),
     ]);
 
+    // שמירה ב-Map
     activeStreams.set(streamId, {
       ffmpeg,
       startTime: Date.now(),
-      isPaused: false,
+      streamPath,
     });
 
-    // ✅ עדכון הבאקנד שהשידור התחיל
-    this.notifyBackend(streamId, 'LIVE');
-
+    // חיבור ה-Stream
     inputPipe.pipe(ffmpeg.stdin);
 
+    // טיפול בלוגים
     ffmpeg.stderr.on('data', (data) => {
       const output = data.toString();
       if (output.includes('Opening') && output.includes('.ts')) {
-        console.log(`📦 FFmpeg: New segment for ${streamId}`);
+        console.log(`📦 New segment created for ${streamId}`);
+      }
+      if (output.includes('error')) {
+        console.error(`❌ FFmpeg error [${streamId}]:`, output);
       }
     });
 
-    ffmpeg.on('close', (code) => {
-      console.log(`🛑 Stream ${streamId} closed (code: ${code})`);
+    // סיום
+    ffmpeg.on('close', async (code) => {
+      console.log(`🛑 Stream ${streamId} ended (code: ${code})`);
+      await this.notifyBackend(streamId, 'FINISHED');
       activeStreams.delete(streamId);
-
-      // ✅ עדכון הבאקנד שהשידור הסתיים
-      this.notifyBackend(streamId, 'FINISHED');
 
       if (res && !res.headersSent) {
         res.end();
       }
     });
 
+    // שגיאות
     inputPipe.on('error', (err) => {
-      console.error(`❌ Input pipe error [${streamId}]:`, err.message);
-      if (ffmpeg && !ffmpeg.killed) {
+      console.error(`❌ Input error [${streamId}]:`, err.message);
+      if (!ffmpeg.killed) {
         ffmpeg.kill('SIGTERM');
       }
-      activeStreams.delete(streamId);
     });
+
+    // עדכון Backend
+    await this.notifyBackend(streamId, 'LIVE');
+
+    console.log(`✅ Stream ${streamId} is now LIVE`);
+    console.log(
+      `📺 Watch at: http://localhost:8000/hls/${streamId}/index.m3u8`
+    );
   },
 
   stopStream(streamId) {
     const stream = activeStreams.get(streamId);
     if (stream && stream.ffmpeg) {
       stream.ffmpeg.kill('SIGTERM');
-      // ה-close handler כבר יעדכן את הבאקנד כ-FINISHED
+      activeStreams.delete(streamId);
     }
   },
 };
