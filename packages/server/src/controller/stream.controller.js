@@ -7,28 +7,32 @@ const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
 
 const streamController = {
-  // POST /api/streams/:streamId/start
   async start(req, res) {
     const { streamId } = req.params;
 
     try {
+      console.log(`🚀 Start request received for stream: ${streamId}`);
+
+      // *** שינוי קריטי: שחרר את ה-Response מיד ***
+      res.status(200).json({
+        message: 'Stream ingestion started',
+        streamId,
+      });
+
+      // *** עכשיו תן ל-Service לעבוד ברקע ***
+      // זה ימשיך לרוץ גם אחרי שה-Response נשלח
       await streamService.startStream(streamId, req);
 
-      console.log(`Stream ingest started: ${streamId}`);
-
-      // אנחנו לא סוגרים את ה-res כאן במידה והוא משמש כ-Pipe,
-      // אבל כדאי לשלוח סטטוס ראשוני אם ה-Client מצפה לתגובה
-      if (!res.headersSent) {
-        res.status(200).json({ message: 'Stream ingestion started' });
-      }
+      console.log(`✅ Stream ${streamId} processing completed`);
     } catch (error) {
-      console.error(`Controller Error: ${error.message}`);
+      console.error(`❌ Controller Error: ${error.message}`);
+      // אם ה-Response כבר נשלח, רק לוג את השגיאה
       if (!res.headersSent) {
         res.status(500).json({ error: error.message });
       }
     }
   },
-  // POST /api/streams
+
   async createStream(req, res) {
     try {
       const userId = req.user.id;
@@ -51,7 +55,6 @@ const streamController = {
     }
   },
 
-  // PATCH /api/games/:id/status
   async updateStatus(req, res) {
     try {
       const { id } = req.params;
@@ -68,7 +71,6 @@ const streamController = {
       let result;
       const io = req.app.get('io');
 
-      // פיצול לוגיקה בין סטרים למשחק
       if (status === 'LIVE' || status === 'PAUSE') {
         result = await streamService.updateStreamStatus(
           id,
@@ -101,7 +103,7 @@ const streamController = {
       res.status(500).json({ error: error.message || 'שגיאה בעדכון הסטטוס' });
     }
   },
-  // עדכון סטטוס וחישוב זמני עצירה
+
   async pauseStream(req, res) {
     const { streamId, status } = req.body;
     try {
@@ -116,13 +118,12 @@ const streamController = {
       if (status === 'PAUSE') {
         updateData.lastPausedAt = now;
       } else if (status === 'LIVE' && stream.lastPausedAt) {
-        // חישוב משך העצירה והוספה למצטבר
         const pauseDuration =
           now.getTime() - new Date(stream.lastPausedAt).getTime();
         const currentAccumulated = stream.accumulatedPauseMs || 0;
 
         updateData.accumulatedPauseMs = currentAccumulated + pauseDuration;
-        updateData.lastPausedAt = null; // איפוס זמן העצירה
+        updateData.lastPausedAt = null;
       }
 
       const updatedStream = await prisma.stream.update({
@@ -139,12 +140,12 @@ const streamController = {
       res.status(500).json({ error: error.message });
     }
   },
+
   async handleQuestionPause(req, res) {
     const { streamId } = req.body;
-    const PAUSE_TIME_SECONDS = 30; // משך זמן העצירה לשאלה
+    const PAUSE_TIME_SECONDS = 30;
 
     try {
-      // 1. עדכון לסטטוס PAUSE
       await prisma.stream.update({
         where: { id: streamId },
         data: {
@@ -153,10 +154,8 @@ const streamController = {
         },
       });
 
-      // 2. שליחת הודעה לצופים דרך Socket.io
       req.app.get('io').to(streamId).emit('stream_paused', { streamId });
 
-      // 3. מנגנון חזרה אוטומטית ל-LIVE
       setTimeout(async () => {
         const stream = await prisma.stream.findUnique({
           where: { id: streamId },
@@ -186,46 +185,6 @@ const streamController = {
       res.status(500).json({ error: error.message });
     }
   },
-  // POST /api/streams/:id/pause
-  // async pauseStream(req, res) {
-  //   try {
-  //     const { id } = req.params;
-  //     const { videoTimestamp } = req.body;
-
-  //     const result = await streamService.pauseStream(id, videoTimestamp);
-
-  //     const io = req.app.get('io');
-  //     if (io) {
-  //       io.to(id).emit('stream_paused', {
-  //         streamId: id,
-  //         videoTimestamp,
-  //         status: 'PAUSE',
-  //       });
-  //     }
-
-  //     res
-  //       .status(200)
-  //       .json({ message: 'הסטרים הושהה', videoTimestamp, data: result });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // POST /api/streams/:id/resume
-  //   async resumeStream(req, res) {
-  //     try {
-  //       const { id } = req.params;
-  //       const result = await streamService.resumeStream(id);
-
-  //       const io = req.app.get('io');
-  //       if (io) {
-  //         io.to(id).emit('stream_resumed', { streamId: id, status: 'LIVE' });
-  //       }
-
-  //       res.status(200).json({ message: 'השידור חודש', data: result });
-  //     } catch (error) {
-  //       res.status(500).json({ error: error.message });
-  //     }
-  //   },
 };
+
 export default streamController;
