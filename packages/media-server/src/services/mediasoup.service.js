@@ -31,12 +31,21 @@ export const createWebRtcTransport = (router) => {
 };
 
 export const createPlainTransport = async (router) => {
-  const transport = await router.createPlainTransport({
-    // מאזינים ל-Localhost כי ה-FFmpeg רץ על אותו שרת (או בתוך אותו קומפוז)
-    listenIp: { ip: '127.0.0.1', announcedIp: null },
-    rtcpMux: false, // הגדרה סטנדרטית לעבודה עם FFmpeg
-    comedia: true, // מאפשר לטרנספורט לזהות אוטומטית מאיפה FFmpeg משדר
-  });
-
-  return transport;
+  console.log('--- Starting createPlainTransport ---');
+  try {
+    const transport = await router.createPlainTransport({
+      // שינוי ל-0.0.0.0 כדי שיקשיב לכל החיבורים בתוך הדוקר
+      listenIp: {
+        ip: '0.0.0.0',
+        announcedIp: process.env.ANNOUNCED_IP || '127.0.0.1',
+      },
+      rtcpMux: false,
+      comedia: true,
+    });
+    console.log('--- PlainTransport created successfully ---');
+    return transport;
+  } catch (error) {
+    console.error('❌ Error in createPlainTransport:', error);
+    throw error;
+  }
 };

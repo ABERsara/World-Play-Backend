@@ -1,6 +1,12 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+// ייבוא הפונקציות של Mediasoup
+import {
+  getWorker,
+  createRouter,
+  createPlainTransport,
+} from './mediasoup.service.js';
 
 const TEMP_DIR = '/usr/src/app/packages/media-server/media_files';
 const activeStreams = new Map();
@@ -42,9 +48,9 @@ export const StreamService = {
       fs.mkdirSync(streamPath, { recursive: true });
     }
 
-    console.log(`🎬 Starting stream: ${streamId}`);
+    console.log(`🎬 Starting stream reception: ${streamId}`);
 
-    // *** שלב 1: שמירת הוידאו לקובץ זמני ***
+    // --- שלב 1: שמירת הוידאו הנכנס לקובץ זמני ---
     const writeStream = fs.createWriteStream(tempVideoPath);
     let totalBytes = 0;
 
@@ -56,96 +62,110 @@ export const StreamService = {
 
     inputPipe.pipe(writeStream);
 
-    // *** שלב 2: כשהקובץ נשמר - הפעל FFmpeg ***
+    // --- שלב 2: כשהקובץ סיים להישמר, מתחילים את ה-WebRTC וה-FFmpeg ---
     writeStream.on('finish', async () => {
-      console.log(
-        `\n✅ Video saved: ${(totalBytes / 1024 / 1024).toFixed(2)} MB`
-      );
-      console.log(`🎬 Starting FFmpeg processing...`);
+      console.log(`\n✅ Video saved. Initializing WebRTC/Mediasoup...`);
 
-      const ffmpeg = spawn('ffmpeg', [
-        '-re',
-        '-i',
-        tempVideoPath,
-        '-c:v',
-        'copy',
-        '-c:a',
-        'aac',
-        '-f',
-        'hls',
-        '-hls_time',
-        '4',
-        '-hls_list_size',
-        '0', // שמור את כל הסגמנטים!
-        '-hls_flags',
-        'append_list', // ללא delete_segments
-        '-hls_segment_filename',
-        path.join(streamPath, 'segment_%03d.ts'),
-        path.join(streamPath, 'index.m3u8'),
-      ]);
+      try {
+        const worker = getWorker();
+        const router = await createRouter(worker);
+        const transport = await createPlainTransport(router);
 
-      ffmpeg.stderr.on('data', (data) => {
-        const msg = data.toString();
-        if (msg.includes('time=')) {
-          const time = msg.match(/time=(\S+)/)?.[1] || '00:00:00';
-          process.stdout.write(`\r🎬 Processing: ${time}`);
-        } else if (msg.includes('error') || msg.includes('Invalid')) {
-          console.error(`\n❌ FFmpeg Error: ${msg.trim()}`);
-        }
-      });
+        const videoRtpPort = transport.tuple.localPort;
+        console.log(`✅ Mediasoup transport is ready on port: ${videoRtpPort}`);
 
-      ffmpeg.on('close', (code) => {
-        console.log(`\n🏁 FFmpeg finished with code ${code}`);
+        // --- כאן הוספתי את ה-Producer (ההוכחה שזה WebRTC) ---
+        // ה-Producer אומר ל-Mediasoup: "תקשיב בפורט הזה, עומד להגיע וידאו"
+        const videoProducer = await transport.produce({
+          kind: 'video',
+          rtpParameters: {
+            codecs: [
+              {
+                mimeType: 'video/h264',
+                clockRate: 90000,
+                payloadType: 101, // ערך סטנדרטי ל-FFmpeg
+                parameters: {
+                  'packetization-mode': 1,
+                  'profile-level-id': '42e01f',
+                },
+              },
+            ],
+            encodings: [{ ssrc: 11111 }], // מספר מזהה לזרם הנתונים
+          },
+        });
 
-        // מחיקת קובץ הזמני בלבד (לא את כל התיקייה!)
-        try {
-          if (fs.existsSync(tempVideoPath)) {
-            fs.unlinkSync(tempVideoPath);
-            console.log(`🗑️ Temp input file deleted`);
+        console.log(`📡 WebRTC Producer created! ID: ${videoProducer.id}`);
+        // ---------------------------------------------------
+
+        console.log(`🎬 Starting FFmpeg processing...`);
+        const ffmpeg = spawn('ffmpeg', [
+          '-re',
+          '-i',
+          tempVideoPath,
+          '-c:v',
+          'libx264',
+          '-preset',
+          'ultrafast',
+          '-tune',
+          'zerolatency',
+          // חשוב: הוספת הגדרות ה-RTP שיתאימו ל-Producer
+          '-f',
+          'rtp',
+          `rtp://127.0.0.1:${videoRtpPort}?pkt_size=1316&ssrc=11111&payload_type=101`,
+          '-f',
+          'hls',
+          '-hls_time',
+          '4',
+          '-hls_list_size',
+          '0',
+          path.join(streamPath, 'index.m3u8'),
+        ]);
+
+        activeStreams.set(streamId, {
+          ffmpeg,
+          router,
+          transport,
+          producer: videoProducer, // שומרים גם את ה-producer בזיכרון
+          startTime: Date.now(),
+          streamPath,
+        });
+
+        // ניהול לוגים של FFmpeg
+        ffmpeg.stderr.on('data', (data) => {
+          const msg = data.toString();
+          if (msg.includes('time=')) {
+            const time = msg.match(/time=(\S+)/)?.[1] || '00:00:00';
+            process.stdout.write(`\r🎬 Streaming Progress: ${time}`);
           }
-        } catch (err) {
-          console.warn(`⚠️ Could not delete temp file: ${err.message}`);
-        }
+        });
 
-        // שמירת הסטרים ב-Map עם סטטוס "completed"
-        const streamData = activeStreams.get(streamId);
-        if (streamData) {
-          streamData.status = 'completed';
-          streamData.completedAt = Date.now();
-          console.log(`✅ Stream ${streamId} completed and files preserved`);
-        }
-      });
+        ffmpeg.on('close', (code) => {
+          console.log(`\n🏁 FFmpeg finished with code ${code}`);
+          // מחיקת הקובץ הזמני בסיום
+          if (fs.existsSync(tempVideoPath)) fs.unlinkSync(tempVideoPath);
+          console.log(`✅ Stream ${streamId} processing finished.`);
+        });
 
-      activeStreams.set(streamId, {
-        ffmpeg,
-        startTime: Date.now(),
-        streamPath,
-      });
-
-      await this.notifyBackend(streamId, 'LIVE');
-      console.log(`\n✅ Stream ${streamId} is now LIVE`);
-      console.log(
-        `📺 Watch at: http://localhost:8000/hls/${streamId}/index.m3u8`
-      );
+        await this.notifyBackend(streamId, 'LIVE');
+        console.log(`\n🚀 Stream is now LIVE via WebRTC and HLS!`);
+      } catch (error) {
+        console.error(`❌ WebRTC Initialization failed:`, error.message);
+      }
     });
 
-    writeStream.on('error', (err) => {
-      console.error(`❌ Write stream error:`, err);
-      throw err;
-    });
-
+    writeStream.on('error', (err) => console.error(`❌ Write error:`, err));
     inputPipe.on('error', (err) => {
-      console.error(`❌ Input pipe error:`, err);
+      console.error(`❌ Input error:`, err);
       writeStream.destroy();
     });
   },
 
   stopStream(streamId) {
     const stream = activeStreams.get(streamId);
-    if (stream && stream.ffmpeg) {
-      stream.ffmpeg.kill('SIGTERM');
+    if (stream) {
+      if (stream.ffmpeg) stream.ffmpeg.kill('SIGTERM');
       activeStreams.delete(streamId);
-      console.log(`🛑 Stream ${streamId} stopped manually.`);
+      console.log(`🛑 Stream ${streamId} stopped.`);
     }
   },
 };

@@ -40,10 +40,11 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
       - ANNOUNCED_IP=${ANNOUNCED_IP:-192.168.56.1}
+      - MEDIA_PORT=8000
     ports:
     - "10007:8000"              # ממפה את 10007 (בחוץ) ל-8000 (בפנים)
-    - "11000-11100:11000-11100/udp" # טווח המדיה שמונע את הקריסה
-    - "11000-11100:11000-11100/tcp"
+    - "11000-11200:11000-11200/udp"
+    - "11000-11200:11000-11200/tcp"
     depends_on:
       db:
         condition: service_healthy
