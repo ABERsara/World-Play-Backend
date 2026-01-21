@@ -1,3 +1,5 @@
+// packages/media-server/src/services/mediasoup.service.js
+
 import mediasoup from 'mediasoup';
 import { config } from '../config.js';
 
@@ -7,9 +9,7 @@ let nextWorkerIdx = 0;
 export const createWorkers = async () => {
   for (let i = 0; i < config.mediasoup.numWorkers; i++) {
     const worker = await mediasoup.createWorker(config.mediasoup.worker);
-    worker.on('died', () => {
-      setTimeout(() => process.exit(1), 2000);
-    });
+    worker.on('died', () => setTimeout(() => process.exit(1), 2000));
     workers.push(worker);
   }
 };
@@ -26,26 +26,17 @@ export const createRouter = (worker) => {
   });
 };
 
-export const createWebRtcTransport = (router) => {
-  return router.createWebRtcTransport(config.mediasoup.webRtcTransport);
+// טרנספורט עבור FFmpeg (מוציא מידע מהשרת לעצמו)
+export const createPlainTransportForFFmpeg = async (router) => {
+  const transport = await router.createPlainTransport({
+    listenIp: { ip: '127.0.0.1' }, // FFmpeg רץ מקומית
+    rtcpMux: false,
+    comedia: false, // אנחנו נגיד לו לאיזה פורט לשלוח
+  });
+  return transport;
 };
 
-export const createPlainTransport = async (router) => {
-  console.log('--- Starting createPlainTransport ---');
-  try {
-    const transport = await router.createPlainTransport({
-      // שינוי ל-0.0.0.0 כדי שיקשיב לכל החיבורים בתוך הדוקר
-      listenIp: {
-        ip: '0.0.0.0',
-        announcedIp: process.env.ANNOUNCED_IP || '127.0.0.1',
-      },
-      rtcpMux: false,
-      comedia: true,
-    });
-    console.log('--- PlainTransport created successfully ---');
-    return transport;
-  } catch (error) {
-    console.error('❌ Error in createPlainTransport:', error);
-    throw error;
-  }
+// טרנספורט עבור הקליינטים (שחקנים/מנחה)
+export const createWebRtcTransport = (router) => {
+  return router.createWebRtcTransport(config.mediasoup.webRtcTransport);
 };
