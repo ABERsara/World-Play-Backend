@@ -9,26 +9,27 @@ datasource db {
 }
 
 model User {
-  id              String            @id @default(uuid())
-  username        String
-  email           String            @unique
-  password        String?
-  role            UserRole          @default(VIEWER)
-  isActive        Boolean           @default(true)
-  isVerified      Boolean           @default(false)
-  lastActiveAt    DateTime?         @map("last_active_at")
-  phoneNumber     String?           @unique
-  firebaseId      String?
-  googleId        String?           @unique
-  facebookId      String?           @unique
+  id               String            @id @default(uuid())
+  username         String
+  email            String            @unique
+  password         String?
+  role             UserRole          @default(VIEWER)
+  isActive         Boolean           @default(true)
+  isVerified       Boolean           @default(false)
+  lastActiveAt     DateTime?         @map("last_active_at")
+  phoneNumber      String?           @unique
+  firebaseId       String?
+  googleId         String?           @unique
+  facebookId       String?           @unique
   
-  // שדות ארנק חדשים (משימה 5.0)
-  walletCoins     Int               @default(0)
-  walletDiamonds  Int               @default(0)
-  isFirstPurchase Boolean           @default(true)
+  // שדות ארנק (משימה 5.0)
+  walletCoins      Int               @default(0)
+  walletDiamonds   Int               @default(0)
+  isFirstPurchase  Boolean           @default(true)
+  stripeCustomerId String?           @unique @map("stripe_customer_id") // הוספנו @map למען עקביות בשמות השדות ב-DB
 
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
   
   receivedMessages ChatMessage[]    @relation("Receiver")
   sentMessages     ChatMessage[]    @relation("Sender")
@@ -47,6 +48,7 @@ model User {
   viewLogs         ViewLog[]
 
   @@map("users")
+  @@index([walletCoins, walletDiamonds]) // אינדקס לביצועים מהירים בעדכוני יתרה
 }
 
 model CreditCard {
