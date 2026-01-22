@@ -21,24 +21,45 @@ export const handleWebhook = async (req, res) => {
   if (event.type === 'payment_intent.succeeded') {
     const intent = event.data.object;
     const userId = intent.metadata.userId;
-    const isFirst = intent.metadata.isFirstPurchase === 'true';
     const amountPaid = intent.amount / 100;
 
-    // עדכון ב-DB בתוך טרנזקציה בטוחה
+    // ביצוע עדכון מאובטח בתוך טרנזקציה
     await prisma.$transaction(async (tx) => {
-      // אם רכישה ראשונה - פי 20 מטבעות (למשל 10 ש"ח = 200 מטבעות)
-      // אם לא - פי 10 מטבעות (10 ש"ח = 100 מטבעות)
-      const coinsToAdd = isFirst ? amountPaid * 20 : amountPaid * 10;
+      // שליפת מצב המשתמש הנוכחי מה-DB
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { isFirstPurchase: true },
+      });
 
+      if (!user) throw new Error('User not found');
+
+      // חישוב המטבעות: יחס בסיסי של 10, ופי 2 אם זו רכישה ראשונה
+      const baseRate = 10;
+      const bonusMultiplier = user.isFirstPurchase ? 2 : 1;
+      const coinsToAdd = amountPaid * baseRate * bonusMultiplier;
+
+      // עדכון היתרה וביטול זכאות לבונוס עתידי
       await tx.user.update({
         where: { id: userId },
         data: {
           walletCoins: { increment: coinsToAdd },
-          isFirstPurchase: false, // ביטול הבונוס לפעם הבאה
+          isFirstPurchase: false,
         },
       });
 
-      // רישום הפעולה בטבלת הטרנזקציות
+      // תיעוד הפעולה בטבלת טרנזקציות
+      //   await tx.transaction.create({
+      //     data: {
+      //       userId: userId,
+      //       type: 'PURCHASE',
+      //       status: 'SUCCESS',
+      //       amount: coinsToAdd,
+      //       currency: 'COIN',
+      //       stripePaymentId: intent.id
+      //     },
+      //   });
+      // });
+
       await tx.transaction.create({
         data: {
           userId: userId,
@@ -46,6 +67,8 @@ export const handleWebhook = async (req, res) => {
           status: 'SUCCESS',
           amount: coinsToAdd,
           currency: 'COIN',
+          // הסירי או הגיבי את השורה הזו:
+          // stripePaymentId: intent.id
         },
       });
     });
