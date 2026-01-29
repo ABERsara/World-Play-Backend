@@ -1,31 +1,30 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { StripeProvider } from '@stripe/stripe-react-native'; 
 import LoginScreen from '../screens/LoginScreen';
-import BroadcastScreen from '../screens/BroadcastScreen';
-import ViewerScreen from '../screens/ViewerScreen';
+import ShopScreen from '../screens/ShopScreen'; 
 
 export default function Page() {
   const [user, setUser] = useState(null);
 
-  // פונקציה שתופעל לאחר התחברות מוצלחת
   const handleLoginSuccess = (userData) => {
-    setUser(userData); // userData מכיל את ה-role
+    setUser(userData);
   };
 
-  // 1. אם המשתמש עדיין לא התחבר - הצג מסך התחברות
-  if (!user) {
-    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
-  }
+  const renderContent = () => {
+    if (!user) {
+      return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+    }
+    
+    // מציג את החנות מיד לאחר הלוגין
+    return <ShopScreen userId={user.id} />; 
+  };
 
-  // 2. אם המשתמש הוא HOST - הצג מסך שידור
-  if (user.role === 'HOST') {
-    return <BroadcastScreen />;
-  }
-
-  // 3. אם המשתמש הוא VIEWER - הצג מסך צפייה
-  if (user.role === 'VIEWER') {
-    return <ViewerScreen />;
-  }
-
-  // מקרה קצה (אם הרול לא מזוהה)
-  return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+  return (
+    <StripeProvider
+      publishableKey="pk_test_51SsLBcDQuGK5KpygzJjMxnCkN5YDTfR0mrVSdH93hSbJDOFry9RBJYG9046FqDyk3pelmMVWUFbyzaVJLNKLv1cR00W98Wqxk0"
+      merchantIdentifier="merchant.com.worldplay"
+    >
+      {renderContent()}
+    </StripeProvider>
+  );
 }

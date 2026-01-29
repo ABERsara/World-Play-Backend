@@ -80,7 +80,8 @@ async function checkMediaServer() {
 const io = initializeSocketIO(server);
 app.set('io', io);
 
-server.listen(PORT, async () => {
+// עדכון השורה הזו:
+server.listen(PORT, '0.0.0.0', async () => { 
   console.log(`✅ Main Server running on port ${PORT}`);
   await checkMediaServer();
 });
