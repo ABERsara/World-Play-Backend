@@ -2,7 +2,7 @@
 import { io } from 'socket.io-client';
 import { authService } from './auth.service';
 
-const SOCKET_URL = "http://10.0.2.2:8000"; // עבור Android Emulator
+const SOCKET_URL = 'http://10.0.2.2:8080'; // עבור Android Emulator
 export let socket = null;
 
 export const connectSocket = async () => {

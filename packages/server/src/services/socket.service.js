@@ -1,35 +1,27 @@
-// packages/server/src/services/socket.service.js
-
 import { Server } from 'socket.io';
 import { socketAuth } from '../middleware/socketAuth.js';
-import { logger } from '../utils/logger.js';
-import { registerGameHandlers } from '../sockets/game.handler.js';
 
 export const initializeSocketIO = (httpServer) => {
-  console.log('socket.service.js -> STARTING INIT');
   const io = new Server(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
   });
 
-  console.log('socket.service.js -> IO Created');
-
   io.use(socketAuth);
 
   io.on('connection', (socket) => {
-    console.log('socket.service.js -> NEW CONNECTION:', socket.id);
-
     const user = socket.user;
-    logger.socketConnect(user, socket.id);
 
-    registerGameHandlers(io, socket);
+    // יצירת חדר פרטי למשתמש לפי ה-ID שלו
+    if (user && user.id) {
+      socket.join(user.id);
+      console.log(`✅ User ${user.id} is ready for real-time updates`);
+    }
 
-    socket.on('disconnect', (reason) => {
-      logger.socketDisconnect(user, socket.id, reason);
+    // ניתוק
+    socket.on('disconnect', () => {
+      console.log('❌ User disconnected:', socket.id);
     });
   });
-
-  logger.system('Socket.io Service Initialized');
-  console.log('socket.service.js -> FINISHED INIT');
 
   return io;
 };

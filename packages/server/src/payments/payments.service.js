@@ -1,15 +1,24 @@
 import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
+
 const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const createPaymentSheet = async (userId, amount) => {
-  // 1. מוצאים את המשתמש
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  // 1. מוצאים את המשתמש ובודקים אם הוא זכאי לבונוס
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      stripeCustomerId: true,
+      isFirstPurchase: true,
+    },
+  });
+
   if (!user) throw new Error('User not found');
 
   // 2. ניהול לקוח (Customer Management)
-  // בודקים אם כבר יש למשתמש מזהה לקוח בסטריפ, אם לא - יוצרים אחד ושומרים ב-DB
   let customerId = user.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -23,35 +32,26 @@ export const createPaymentSheet = async (userId, amount) => {
     });
   }
 
-  // 3. יצירת Ephemeral Key (מפתח זמני)
-  // זה מאפשר לאפליקציה (Frontend) לגשת לפרטי הלקוח בצורה מאובטחת
+  // 3. יצירת Ephemeral Key (מפתח זמני מאובטח)
   const ephemeralKey = await stripe.ephemeralKeys.create(
     { customer: customerId },
-    { apiVersion: '2025-12-15.clover' } // השתמשי בגרסה שמופיעה לך בטרמינל
+    { apiVersion: '2022-11-15' } // ודאי שזו הגרסה שנתמכת אצלך
   );
 
-  // 4. יצירת Payment Intent עם Idempotency Key
-  // ה-Idempotency Key מונע חיוב כפול אם המשתמש לחץ פעמיים בטעות
-  const idempotencyKey = `pay_${userId}_${Date.now()}`;
-
-  const paymentIntent = await stripe.paymentIntents.create(
-    {
-      amount: amount * 100,
-      currency: 'ils',
-      customer: customerId, // מקשרים את התשלום ללקוח שיצרנו
-      metadata: {
-        userId: userId,
-        isFirstPurchase: String(user.isFirstPurchase),
-      },
-      // מאפשר לסטריפ לשמור את הכרטיס לעתיד במידה ותרצי
-      automatic_payment_methods: { enabled: true },
+  // 4. יצירת Payment Intent
+  // ה-Metadata כאן קריטי! הוא עובר ל-Webhook כדי שנדע למי לתת את הבונוס
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: amount * 100, // המרה לאגורות
+    currency: 'ils',
+    customer: customerId,
+    metadata: {
+      userId: userId, // חשוב מאוד עבור ה-Webhook
+      isFirstPurchase: String(user.isFirstPurchase), // לצורך בדיקת הבונוס הכפול
     },
-    {
-      idempotencyKey, // הגנה נגד כפילויות
-    }
-  );
+    automatic_payment_methods: { enabled: true },
+  });
 
-  // 5. מחזירים את כל הנתונים שה-Payment Sheet צריך
+  // 5. מחזירים ל-Frontend את כל המפתחות הדרושים להפעלת ה-Sheet
   return {
     paymentIntent: paymentIntent.client_secret,
     ephemeralKey: ephemeralKey.secret,

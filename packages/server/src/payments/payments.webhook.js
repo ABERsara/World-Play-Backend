@@ -5,73 +5,77 @@ const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const handleWebhook = async (req, res) => {
+  // קבלת החתימה של Stripe כדי לוודא שהבקשה אכן הגיעה מהם
   const sig = req.headers['stripe-signature'];
   let event;
 
   try {
+    // בניית האירוע בצורה מאובטחת
     event = stripe.webhooks.constructEvent(
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
+    console.error(`❌ Webhook Signature failed: ${err.message}`);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  // טיפול במקרה של תשלום שהצליח
   if (event.type === 'payment_intent.succeeded') {
     const intent = event.data.object;
-    const userId = intent.metadata.userId;
-    const amountPaid = intent.amount / 100;
+    const userId = intent.metadata.userId; // ה-ID ששתלנו ב-createPaymentSheet
 
-    // ביצוע עדכון מאובטח בתוך טרנזקציה
-    await prisma.$transaction(async (tx) => {
-      // שליפת מצב המשתמש הנוכחי מה-DB
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: { isFirstPurchase: true },
+    console.log(`💰 [WEBHOOK] Payment Intent Succeeded for user: ${userId}`);
+
+    try {
+      // ביצוע עדכון היתרה בתוך טרנזקציה ב-Database
+      const updatedUser = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+        });
+
+        if (!user) {
+          throw new Error(`User with ID ${userId} not found`);
+        }
+
+        // חישוב המטבעות להוספה: ₪1 = 10 מטבעות. בונוס כפול (20) ברכישה ראשונה
+        const multiplier = user.isFirstPurchase ? 20 : 10;
+        const coinsToAdd = (intent.amount / 100) * multiplier;
+
+        console.log(
+          `🪙 [WEBHOOK] Adding ${coinsToAdd} coins (Multiplier: ${multiplier}x)`
+        );
+
+        // עדכון המשתמש: הוספת מטבעות וביטול סטטוס "רכישה ראשונה"
+        return await tx.user.update({
+          where: { id: userId },
+          data: {
+            walletCoins: { increment: coinsToAdd },
+            isFirstPurchase: false,
+          },
+        });
       });
 
-      if (!user) throw new Error('User not found');
+      // --- שליחת העדכון בזמן אמת לאפליקציה (Real-time Socket) ---
+      const io = req.app.get('io'); // שליפת אובייקט ה-Socket.io ששמרנו ב-app.js
 
-      // חישוב המטבעות: יחס בסיסי של 10, ופי 2 אם זו רכישה ראשונה
-      const baseRate = 10;
-      const bonusMultiplier = user.isFirstPurchase ? 2 : 1;
-      const coinsToAdd = amountPaid * baseRate * bonusMultiplier;
-
-      // עדכון היתרה וביטול זכאות לבונוס עתידי
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          walletCoins: { increment: coinsToAdd },
-          isFirstPurchase: false,
-        },
-      });
-
-      // תיעוד הפעולה בטבלת טרנזקציות
-      //   await tx.transaction.create({
-      //     data: {
-      //       userId: userId,
-      //       type: 'PURCHASE',
-      //       status: 'SUCCESS',
-      //       amount: coinsToAdd,
-      //       currency: 'COIN',
-      //       stripePaymentId: intent.id
-      //     },
-      //   });
-      // });
-
-      await tx.transaction.create({
-        data: {
-          userId: userId,
-          type: 'PURCHASE',
-          status: 'SUCCESS',
-          amount: coinsToAdd,
-          currency: 'COIN',
-          // הסירי או הגיבי את השורה הזו:
-          // stripePaymentId: intent.id
-        },
-      });
-    });
+      if (io) {
+        console.log(`🔌 [WEBHOOK] Sending real-time update to room: ${userId}`);
+        // שליחת היתרה החדשה לחדר הפרטי של המשתמש
+        io.to(userId).emit('wallet:updated', {
+          newBalance: updatedUser.walletCoins,
+        });
+      } else {
+        console.warn(
+          '⚠️ [WEBHOOK] Socket.io instance (io) not found on req.app'
+        );
+      }
+    } catch (error) {
+      console.error('❌ [WEBHOOK] Database Update failed:', error.message);
+    }
   }
+
+  // החזרת תשובה חיובית ל-Stripe כדי שיפסיקו לשלוח את האירוע
   res.json({ received: true });
 };

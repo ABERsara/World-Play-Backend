@@ -1,51 +1,76 @@
 // src/services/auth.service.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Buffer } from 'buffer';
 
 const API_URL = 'http://10.0.2.2:8080/api/users';
 
 export const authService = {
+  /**
+   * התחברות למערכת
+   */
   login: async (email, password) => {
     try {
+      console.log('🔐 [AUTH] Login attempt for:', email);
+
       const response = await fetch(`${API_URL}/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ email, password }),
       });
 
       const data = await response.json();
 
-      if (response.ok && data.token) {
-        // שמירת הטוקן
-        await AsyncStorage.setItem('userToken', data.token);
-
-        // פענוח ה-JWT
-        const payloadBase64 = data.token.split('.')[1];
-        const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
-        
-        return { ...data, user: payload };
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed');
       }
-      throw new Error(data.message || 'Login failed');
+
+      if (data.token) {
+        // שמירת הטוקן ב-AsyncStorage
+        await AsyncStorage.setItem('userToken', data.token);
+        console.log('✅ [AUTH] Token saved successfully');
+
+        // החזרת כל המידע שהשרת שלח
+        return {
+          token: data.token,
+          user: data.user, // { id, name, username, email, role }
+        };
+      }
+
+      throw new Error('No token received from server');
     } catch (error) {
-      console.error('Login Error:', error);
+      console.error('❌ [AUTH] Login error:', error);
       throw error;
     }
   },
 
+  /**
+   * קבלת הטוקן מה-Storage
+   */
   getToken: async () => {
     try {
-      return await AsyncStorage.getItem('userToken');
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        console.log('✅ [AUTH] Token retrieved');
+      } else {
+        console.log('⚠️ [AUTH] No token in storage');
+      }
+      return token;
     } catch (error) {
-      console.error('Error getting token:', error);
+      console.error('❌ [AUTH] Error getting token:', error);
       return null;
     }
   },
 
+  /**
+   * יציאה מהמערכת
+   */
   logout: async () => {
     try {
       await AsyncStorage.removeItem('userToken');
+      console.log('✅ [AUTH] Logged out successfully');
     } catch (error) {
-      console.error('Error removing token:', error);
+      console.error('❌ [AUTH] Error during logout:', error);
     }
   },
 };

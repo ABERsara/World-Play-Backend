@@ -1,49 +1,124 @@
-// src/screens/LoginScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import PropTypes from 'prop-types'; //
 import { authService } from '../services/auth.service';
 
-export default function LoginScreen({ onLoginSuccess }) {
+const LoginScreen = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('שגיאה', 'נא למלא את כל השדות');
+      return;
+    }
+
+    setLoading(true);
     try {
       const data = await authService.login(email, password);
-      // data.user מכיל כעת את ה-role (HOST או VIEWER)
-      onLoginSuccess(data.user); 
+      onLoginSuccess({
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.username || data.user.email,
+      });
     } catch (error) {
-      console.error('Login error:', error);
-      alert('שגיאת התחברות: ' + error.message);
+      Alert.alert('שגיאת התחברות', error.message || 'אימייל או סיסמה שגויים');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>World Play - Login</Text>
+      <Text style={styles.title}>🎮 WorldPlay</Text>
+      <Text style={styles.subtitle}>התחברות</Text>
+
       <TextInput
-        placeholder="Email"
-        placeholderTextColor="#666"
         style={styles.input}
+        placeholder="אימייל"
+        placeholderTextColor="#888"
         value={email}
         onChangeText={setEmail}
+        keyboardType="email-address"
         autoCapitalize="none"
       />
+
       <TextInput
-        placeholder="Password"
-        placeholderTextColor="#666"
         style={styles.input}
+        placeholder="סיסמה"
+        placeholderTextColor="#888"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
       />
-      <Button title="התחבר" onPress={handleLogin} color="#ff4757" />
+
+      <TouchableOpacity
+        style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
+        onPress={handleLogin}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.loginText}>כניסה</Text>
+        )}
+      </TouchableOpacity>
     </View>
   );
-}
+};
+
+// הגדרת ולידציה ל-Props
+LoginScreen.propTypes = {
+  onLoginSuccess: PropTypes.func.isRequired,
+};
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#1a1a1a' },
-  title: { fontSize: 24, color: '#fff', marginBottom: 20, textAlign: 'center', fontWeight: 'bold' },
-  input: { backgroundColor: '#fff', padding: 15, borderRadius: 8, marginBottom: 15, color: '#000' }
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: '#1a1a1a',
+  },
+  title: {
+    fontSize: 36,
+    textAlign: 'center',
+    color: '#ffa502',
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 24,
+    textAlign: 'center',
+    color: '#fff',
+    marginBottom: 30,
+  },
+  input: {
+    backgroundColor: '#2f3542',
+    color: '#fff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    fontSize: 16,
+    textAlign: 'right',
+  },
+  loginBtn: {
+    backgroundColor: '#ffa502',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  loginBtnDisabled: { opacity: 0.6 },
+  loginText: { color: '#000', fontWeight: 'bold', fontSize: 18 },
 });
+
+export default LoginScreen;

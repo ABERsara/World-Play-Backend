@@ -3,18 +3,11 @@ import userService from '../services/user.service.js'; // ייבוא הסרבי�
 // --- שליפת פרטי המשתמש הנוכחי (GET /me) ---
 export const getMe = async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    // שימוש בסרביס לשליפת הנתונים
+    const userId = req.user.id; // מגיע מה-Middleware של ה-Auth
     const user = await userService.getUserProfile(userId);
-
     res.json(user);
   } catch (error) {
-    console.error(error);
-    // אם המשתמש לא נמצא (למרות שה-Auth עבר), הסרביס יזרוק שגיאה
-    res
-      .status(500)
-      .json({ message: error.message || 'שגיאה בשליפת פרטי משתמש' });
+    res.status(500).json({ message: error.message || 'שגיאה בשליפת פרופיל' });
   }
 };
 

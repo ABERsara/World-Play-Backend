@@ -7,7 +7,6 @@ const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const userService = {
- 
   async createUser(name, username, email, plainPassword) {
     // ולידציות
     validationService.validateNonEmptyText(name, 'Name');
@@ -41,9 +40,9 @@ const userService = {
     }
 
     const token = jwt.sign(
-      { userId: user.id, userRole: user.role },
+      { id: user.id, email: user.email, role: user.role }, // ⬅️ שים לב ששיניתי ל-id (לא userId)
       JWT_SECRET,
-      { expiresIn: '1d' }
+      { expiresIn: '30m' } // ⬅️ שים לב לזמן
     );
 
     return {
@@ -52,6 +51,7 @@ const userService = {
         id: user.id,
         name: user.name,
         username: user.username,
+        email: user.email, // ⬅️ הוספתי email
         role: user.role,
       },
     };
@@ -67,10 +67,9 @@ const userService = {
 
   /**
    * שליפת פרופיל מלא למשתמש (עבור getMe)
+   * 🔥 תוקן: כעת כולל walletCoins ו-isFirstPurchase
    */
   async getUserProfile(userId) {
-    await validationService.ensureUserExists(userId);
-
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -79,13 +78,17 @@ const userService = {
         email: true,
         role: true,
         phoneNumber: true,
-        firebaseId: true,
         isActive: true,
         createdAt: true,
+        // השדות שראינו שחסרים בפוסטמן:
+        walletCoins: true, // 🔥 חיוני ליתרה
+        walletDiamonds: true, // 🔥 חיוני ליהלומים
+        isFirstPurchase: true, // 🔥 חיוני לבונוס
         points: true,
       },
     });
 
+    if (!user) throw new Error('User not found');
     return user;
   },
 
@@ -109,6 +112,7 @@ const userService = {
           username: true,
           phoneNumber: true,
           firebaseId: true,
+          walletCoins: true, // ⬅️ גם כאן כדאי להחזיר
         },
       });
 
