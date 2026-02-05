@@ -23,8 +23,7 @@ model User {
   facebookId       String?           @unique
   
   // שדות ארנק
-  walletCoins      Int               @default(0)
-  walletDiamonds   Int               @default(0)
+  walletBalance Decimal  @default(1000.00) @db.Decimal(10, 2)
   isFirstPurchase  Boolean           @default(true)
   stripeCustomerId String?           @unique @map("stripe_customer_id")
 
@@ -48,7 +47,6 @@ model User {
   viewLogs         ViewLog[]         @relation("UserLogs")
 
   @@map("users")
-  @@index([walletCoins, walletDiamonds])
 }
 
 model ChatMessage {
@@ -121,7 +119,7 @@ model CreditCard {
 }
 
 model Stream {
-  id                 String       @id @default(uuid())
+    id                 String       @id @default(uuid())
   title              String
   hostId             String       @map("host_id")
   startTime          DateTime?    @map("start_time")
@@ -163,8 +161,8 @@ model GameParticipant {
   gameId       String   @map("game_id")
   userId       String   @map("user_id")
   role         UserRole
-  score        Int      @default(0)
-  pointsInGame Int      @default(0)
+  score   Decimal @default(0.00) @db.Decimal(10, 2)  
+  
   joinedAt     DateTime @default(now()) @map("joined_at")
   game         Game     @relation(fields: [gameId], references: [id])
   user         User     @relation(fields: [userId], references: [id])
@@ -218,7 +216,7 @@ model UserPoint {
   id            String       @id @default(uuid())
   userId        String       @map("user_id")
   pointType     PointType    @map("point_type")
-  amount        Int
+amount        Decimal      @db.Decimal(10, 2)
   receivedAt    DateTime     @default(now()) @map("received_at")
   transactionId String?      @map("transaction_id")
   gameId        String?      @map("game_id")
@@ -235,7 +233,7 @@ model Transaction {
   type          TransactionType
   status        TransactionStatus @default(PENDING)
   currency      CurrencyType      @default(COIN)
-  amount        Int
+amount        Decimal           @db.Decimal(10, 2)
   gameId        String?           @map("game_id")
   metadata      Json?
   description   String?
