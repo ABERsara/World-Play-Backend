@@ -7,7 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import PropTypes from 'prop-types'; // נוסף כדי לפתור את השגיאה ב-Git
+import PropTypes from 'prop-types';
 import { useStripe } from '@stripe/stripe-react-native';
 import { authService } from '../services/auth.service';
 import { socket, connectSocket } from '../services/socket.service';
@@ -19,7 +19,7 @@ const ShopScreen = ({ userId, onLogout }) => {
   const [fetchingBalance, setFetchingBalance] = useState(true);
 
   useEffect(() => {
-    const fetchBalance = async () => {
+    const initializeScreen = async () => {
       try {
         setFetchingBalance(true);
         const token = await authService.getToken();
@@ -29,6 +29,7 @@ const ShopScreen = ({ userId, onLogout }) => {
           return;
         }
 
+        // 1. שליפת היתרה
         const response = await fetch('http://10.0.2.2:8080/api/users/profile', {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -40,34 +41,62 @@ const ShopScreen = ({ userId, onLogout }) => {
         }
 
         const data = await response.json();
+        console.log('📊 Profile data:', data);
+
         if (data.walletCoins !== undefined) {
           setCoins(data.walletCoins);
+          console.log('💰 Current balance:', data.walletCoins);
+        }
+
+        // 2. חיבור Socket רק אחרי שקיבלנו את היתרה
+        console.log('🔌 Connecting socket for userId:', userId);
+        const connectedSocket = await connectSocket();
+
+        if (connectedSocket) {
+          console.log('✅ Socket connected successfully');
+
+          // 3. הצטרפות לחדר האישי של המשתמש
+          connectedSocket.emit('user:join', { userId });
+
+          // 4. האזנה לעדכוני ארנק
+          connectedSocket.on('wallet:updated', (updateData) => {
+            console.log('💰 Wallet update received:', updateData);
+            if (updateData.newBalance !== undefined) {
+              setCoins(updateData.newBalance);
+              Alert.alert(
+                'הטעינה הצליחה! 🎉',
+                `היתרה החדשה: ${updateData.newBalance} מטבעות`
+              );
+            }
+          });
+        } else {
+          console.warn('⚠️ Socket connection failed');
         }
       } catch (e) {
-        console.error('❌ Fetch error:', e);
+        console.error('❌ Initialization error:', e);
       } finally {
         setFetchingBalance(false);
       }
     };
 
-    fetchBalance();
-    connectSocket();
+    initializeScreen();
 
-    socket?.on('wallet:updated', (data) => {
-      if (data.newBalance !== undefined) {
-        setCoins(data.newBalance);
-      }
-    });
-
+    // ניקוי בעת יציאה מהמסך
     return () => {
-      socket?.off('wallet:updated');
+      if (socket) {
+        socket.off('wallet:updated');
+        console.log('🔌 Socket listeners cleaned up');
+      }
     };
-  }, [onLogout]);
+  }, [userId, onLogout]);
 
   const buyPackage = async (amount) => {
     setLoading(true);
     try {
       const token = await authService.getToken();
+
+      console.log('💳 Initiating purchase:', { userId, coins: amount });
+
       const response = await fetch(
         'http://10.0.2.2:8080/api/payments/create-sheet',
         {
@@ -76,11 +105,13 @@ const ShopScreen = ({ userId, onLogout }) => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ userId, amount }),
+          body: JSON.stringify({ userId, coins: amount }),
         }
       );
 
       const data = await response.json();
+      console.log('💳 Payment sheet data received');
+
       const { paymentIntent, ephemeralKey, customer } = data;
 
       const { error: initError } = await initPaymentSheet({
@@ -93,8 +124,17 @@ const ShopScreen = ({ userId, onLogout }) => {
       });
 
       if (initError) throw initError;
-      await presentPaymentSheet();
+
+      const { error: paymentError } = await presentPaymentSheet();
+
+      if (paymentError) {
+        console.log('❌ Payment cancelled or failed:', paymentError.message);
+      } else {
+        console.log('✅ Payment completed successfully');
+        Alert.alert('בהצלחה!', 'התשלום בוצע. היתרה תתעדכן תוך שניות...');
+      }
     } catch (error) {
+      console.error('❌ Payment error:', error);
       Alert.alert('שגיאה', error.message);
     } finally {
       setLoading(false);
@@ -105,6 +145,7 @@ const ShopScreen = ({ userId, onLogout }) => {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#ffa502" />
+        <Text style={styles.loadingText}>טוען נתונים...</Text>
       </View>
     );
   }
@@ -157,14 +198,13 @@ const ShopScreen = ({ userId, onLogout }) => {
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#ff4757" />
-          <Text style={styles.loadingText}>מעבד...</Text>
+          <Text style={styles.loadingText}>מעבד תשלום...</Text>
         </View>
       )}
     </View>
   );
 };
 
-// ולידציה ל-Props - זה מה שפותר את השגיאה ב-Commit
 ShopScreen.propTypes = {
   userId: PropTypes.string.isRequired,
   onLogout: PropTypes.func.isRequired,

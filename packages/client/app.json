@@ -63,7 +63,8 @@
           "merchantIdentifier": "merchant.com.worldplay",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "expo-router"
     ],
     "experiments": {
       "typedRoutes": true,

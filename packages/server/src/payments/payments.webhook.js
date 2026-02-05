@@ -5,77 +5,102 @@ const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const handleWebhook = async (req, res) => {
-  // קבלת החתימה של Stripe כדי לוודא שהבקשה אכן הגיעה מהם
   const sig = req.headers['stripe-signature'];
-  let event;
 
+  let event;
   try {
-    // בניית האירוע בצורה מאובטחת
     event = stripe.webhooks.constructEvent(
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error(`❌ Webhook Signature failed: ${err.message}`);
+    console.error('❌ Webhook signature failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // טיפול במקרה של תשלום שהצליח
   if (event.type === 'payment_intent.succeeded') {
     const intent = event.data.object;
-    const userId = intent.metadata.userId; // ה-ID ששתלנו ב-createPaymentSheet
 
-    console.log(`💰 [WEBHOOK] Payment Intent Succeeded for user: ${userId}`);
+    const userId = intent.metadata?.userId;
+    const baseCoins = Number(intent.metadata?.coins);
+
+    console.log('🔍 WEBHOOK RECEIVED:');
+    console.log('userId:', userId);
+    console.log('coins:', baseCoins);
+
+    if (!userId || isNaN(baseCoins)) {
+      console.error('❌ Missing or invalid metadata');
+      return res.status(400).json({ error: 'Missing required metadata' });
+    }
 
     try {
-      // ביצוע עדכון היתרה בתוך טרנזקציה ב-Database
-      const updatedUser = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx) => {
         const user = await tx.user.findUnique({
           where: { id: userId },
         });
 
         if (!user) {
-          throw new Error(`User with ID ${userId} not found`);
+          throw new Error(`User ${userId} not found`);
         }
 
-        // חישוב המטבעות להוספה: ₪1 = 10 מטבעות. בונוס כפול (20) ברכישה ראשונה
-        const multiplier = user.isFirstPurchase ? 20 : 10;
-        const coinsToAdd = (intent.amount / 100) * multiplier;
+        const isFirst = user.isFirstPurchase;
 
-        console.log(
-          `🪙 [WEBHOOK] Adding ${coinsToAdd} coins (Multiplier: ${multiplier}x)`
-        );
+        const coinsToAdd = isFirst ? baseCoins * 2 : baseCoins;
 
-        // עדכון המשתמש: הוספת מטבעות וביטול סטטוס "רכישה ראשונה"
-        return await tx.user.update({
+        const updatedUser = await tx.user.update({
           where: { id: userId },
           data: {
             walletCoins: { increment: coinsToAdd },
             isFirstPurchase: false,
           },
         });
+
+        await tx.transaction.create({
+          data: {
+            userId,
+            type: 'PURCHASE',
+            status: 'SUCCESS',
+            amount: coinsToAdd,
+            currency: 'COIN',
+            description: isFirst ? 'בונוס רכישה ראשונה (פי 2)' : 'רכישת מטבעות',
+            metadata: {
+              stripePaymentIntentId: intent.id,
+              isFirstPurchase: isFirst,
+              baseCoins,
+              amountPaid: intent.amount / 100,
+            },
+          },
+        });
+
+        await tx.notification.create({
+          data: {
+            userId,
+            title: 'הטעינה הצליחה! 💰',
+            message: `נוספו לחשבונך ${coinsToAdd} מטבעות.${
+              isFirst ? ' כולל בונוס רכישה ראשונה!' : ''
+            }`,
+          },
+        });
+
+        return updatedUser;
       });
 
-      // --- שליחת העדכון בזמן אמת לאפליקציה (Real-time Socket) ---
-      const io = req.app.get('io'); // שליפת אובייקט ה-Socket.io ששמרנו ב-app.js
+      console.log(
+        `✅ SUCCESS: User ${userId} now has ${result.walletCoins} coins`
+      );
 
+      const io = req.app.get('io');
       if (io) {
-        console.log(`🔌 [WEBHOOK] Sending real-time update to room: ${userId}`);
-        // שליחת היתרה החדשה לחדר הפרטי של המשתמש
         io.to(userId).emit('wallet:updated', {
-          newBalance: updatedUser.walletCoins,
+          newBalance: result.walletCoins,
         });
-      } else {
-        console.warn(
-          '⚠️ [WEBHOOK] Socket.io instance (io) not found on req.app'
-        );
       }
     } catch (error) {
-      console.error('❌ [WEBHOOK] Database Update failed:', error.message);
+      console.error('❌ WEBHOOK ERROR:', error.message);
+      return res.status(500).json({ error: 'Internal processing error' });
     }
   }
 
-  // החזרת תשובה חיובית ל-Stripe כדי שיפסיקו לשלוח את האירוע
   res.json({ received: true });
 };
