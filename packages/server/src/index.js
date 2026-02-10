@@ -18,6 +18,7 @@ import statusRoutes from './routes/status.routes.js';
 import { initializeSocketIO } from './services/socket.service.js';
 
 import paymentRoutes from './routes/payment.routes.js';
+import economyRoutes from './routes/economy.routes.js';
 import { handleWebhook } from './payments/payments.webhook.js';
 
 dotenv.config();
@@ -54,6 +55,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 
 app.use('/api/payments', paymentRoutes);
+app.use('/api/economy', economyRoutes);
 
 // --- Functions ---
 async function checkMediaServer() {
@@ -81,7 +83,7 @@ const io = initializeSocketIO(server);
 app.set('io', io);
 
 // עדכון השורה הזו:
-server.listen(PORT, '0.0.0.0', async () => { 
+server.listen(PORT, '0.0.0.0', async () => {
   console.log(`✅ Main Server running on port ${PORT}`);
   await checkMediaServer();
 });

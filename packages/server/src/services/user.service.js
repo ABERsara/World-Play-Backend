@@ -67,7 +67,7 @@ const userService = {
 
   /**
    * שליפת פרופיל מלא למשתמש (עבור getMe)
-   * 🔥 תוקן: כעת כולל walletCoins ו-isFirstPurchase
+   * 🔥 תוקן: כעת כולל walletBalance ו-isFirstPurchase
    */
   async getUserProfile(userId) {
     const user = await prisma.user.findUnique({
@@ -81,7 +81,7 @@ const userService = {
         isActive: true,
         createdAt: true,
         // השדות שראינו שחסרים בפוסטמן:
-        walletCoins: true, // 🔥 חיוני ליתרה
+        walletBalance: true, // 🔥 חיוני ליתרה
         walletDiamonds: true, // 🔥 חיוני ליהלומים
         isFirstPurchase: true, // 🔥 חיוני לבונוס
         points: true,
@@ -112,7 +112,7 @@ const userService = {
           username: true,
           phoneNumber: true,
           firebaseId: true,
-          walletCoins: true, // ⬅️ גם כאן כדאי להחזיר
+          walletBalance: true, // ⬅️ גם כאן כדאי להחזיר
         },
       });
 

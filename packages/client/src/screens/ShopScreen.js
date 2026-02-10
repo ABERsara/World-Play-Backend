@@ -43,9 +43,9 @@ const ShopScreen = ({ userId, onLogout }) => {
         const data = await response.json();
         console.log('📊 Profile data:', data);
 
-        if (data.walletCoins !== undefined) {
-          setCoins(data.walletCoins);
-          console.log('💰 Current balance:', data.walletCoins);
+        if (data.walletBalance !== undefined) {
+          setCoins(data.walletBalance);
+          console.log('💰 Current balance:', data.walletBalance);
         }
 
         // 2. חיבור Socket רק אחרי שקיבלנו את היתרה

@@ -51,7 +51,7 @@ export const handleWebhook = async (req, res) => {
         const updatedUser = await tx.user.update({
           where: { id: userId },
           data: {
-            walletCoins: { increment: coinsToAdd },
+            walletBalance: { increment: coinsToAdd },
             isFirstPurchase: false,
           },
         });
@@ -87,13 +87,13 @@ export const handleWebhook = async (req, res) => {
       });
 
       console.log(
-        `✅ SUCCESS: User ${userId} now has ${result.walletCoins} coins`
+        `✅ SUCCESS: User ${userId} now has ${result.walletBalance} coins`
       );
 
       const io = req.app.get('io');
       if (io) {
         io.to(userId).emit('wallet:updated', {
-          newBalance: result.walletCoins,
+          newBalance: result.walletBalance,
         });
       }
     } catch (error) {
