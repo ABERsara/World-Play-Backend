@@ -1,110 +1,77 @@
 // src/services/economy.service.js
-import { PrismaClient } from '@prisma/client';
+
+import { PrismaClient, Prisma } from '@prisma/client';
+
 const prisma = new PrismaClient();
 
 const economyService = {
-  _calculateShares(totalAmount, playerPercentage) {
-    const playerShare = Math.floor(totalAmount * playerPercentage);
-    const moderatorShare = totalAmount - playerShare;
-    return { playerShare, moderatorShare };
-  },
-
+  // --- פרק 3: מערכת המתנות (עודכן לדיוק עשרוני 65/35) ---
   async sendGift(senderId, receiverPlayerId, moderatorId, giftValue, gameId) {
     return await prisma.$transaction(async (tx) => {
-      // --- שלב 1: בדיקות קיום (כדי למנוע את השגיאה שקיבלת) ---
-
-      // בדיקת שולח
       const sender = await tx.user.findUnique({ where: { id: senderId } });
-      if (!sender) throw new Error(`Sender (ID: ${senderId}) not found`);
-      if (Number(sender.walletBalance) < giftValue)
+      if (!sender) throw new Error(`Sender not found`);
+
+      // המרה ל-Decimal
+      const giftDecimal = new Prisma.Decimal(giftValue.toString());
+
+      // שימוש ב-Decimal להשוואה
+      if (sender.walletBalance.lt(giftDecimal))
         throw new Error('Insufficient balance');
 
-      // בדיקת מקבל
-      const receiver = await tx.user.findUnique({
-        where: { id: receiverPlayerId },
-      });
-      if (!receiver)
-        throw new Error(`Receiver (ID: ${receiverPlayerId}) not found`);
+      // חישוב עשרוני מדויק (35% למקבל, השאר למנחה)
+      const receiverShare = giftDecimal.mul(0.35).toFixed(2);
+      const hostShare = giftDecimal.minus(receiverShare).toFixed(2);
 
-      // בדיקת השתתפות במשחק (הסיבה הכי נפוצה לשגיאה שלך)
-      const participant = await tx.gameParticipant.findUnique({
-        where: { gameId_userId: { gameId, userId: receiverPlayerId } },
-      });
-      if (!participant)
-        throw new Error(
-          `Receiver is not a participant in game: ${gameId}. Run 'Join Game' first.`
-        );
-
-      // --- שלב 2: החישוב ---
-      const { playerShare, moderatorShare } = this._calculateShares(
-        giftValue,
-        0.35
-      );
-
-      // --- שלב 3: העדכונים ---
-
-      // ניכוי מהשולח
       await tx.user.update({
         where: { id: senderId },
-        data: { walletBalance: { decrement: giftValue } },
+        data: { walletBalance: { decrement: giftDecimal.toFixed(2) } },
       });
 
-      // זיכוי למקבל
       await tx.user.update({
         where: { id: receiverPlayerId },
-        data: { walletBalance: { increment: playerShare } },
+        data: { walletBalance: { increment: receiverShare } },
       });
 
-      // זיכוי למנחה
       await tx.user.update({
         where: { id: moderatorId },
-        data: { walletBalance: { increment: moderatorShare } },
+        data: { walletBalance: { increment: hostShare } },
       });
 
-      // עדכון ניקוד בתוך המשחק
-      await tx.gameParticipant.update({
-        where: { gameId_userId: { gameId, userId: receiverPlayerId } },
-        data: { score: { increment: playerShare } },
-      });
-
-      // תיעוד
       await tx.transaction.create({
         data: {
           userId: senderId,
           type: 'GIFT',
-          amount: giftValue,
+          amount: giftDecimal.toFixed(2),
           gameId,
-          description: `Gift to ${receiverPlayerId}`,
+          description: `Gift: ${receiverShare} to player, ${hostShare} to host`,
           status: 'SUCCESS',
         },
       });
 
-      return { playerShare, moderatorShare };
+      return { receiverShare, hostShare };
     });
   },
+
+  // --- פרק 3: מי ינצח (עודכן לדיוק עשרוני 85/15) ---
   async processWinnerPayout(questionId, correctOptionId, moderatorId, gameId) {
     return await prisma.$transaction(async (tx) => {
-      // 1. מציאת השחקן שצמוד לאופציה הנכונה
       const option = await tx.questionOption.findUnique({
         where: { id: correctOptionId },
       });
-
       if (!option?.linkedPlayerId) return null;
 
-      // 2. איסוף הקופה (משימה 2)
       const totalWagers = await tx.userAnswer.aggregate({
-        where: { questionId: questionId },
+        where: { questionId },
         _sum: { wager: true },
       });
 
-      const totalPot = totalWagers._sum.wager || 0;
-      if (totalPot === 0) return { totalPot: 0 };
+      const totalPot = totalWagers._sum.wager || new Prisma.Decimal(0);
+      if (totalPot.equals(0)) return { totalPot: '0.00' };
 
-      // 3. חלוקה 85/15 עם לוגיקת השארית (משימה 3)
-      const playerShare = Math.floor(totalPot * 0.85);
-      const moderatorShare = totalPot - playerShare; // השארית עוברת אוטומטית למנחה
+      // חלוקה עשרונית מדויקת
+      const playerShare = totalPot.mul(0.85).toFixed(2);
+      const moderatorShare = totalPot.minus(playerShare).toFixed(2);
 
-      // 4. עדכון יתרות בבנק (משימה 5)
       await tx.user.update({
         where: { id: option.linkedPlayerId },
         data: { walletBalance: { increment: playerShare } },
@@ -115,20 +82,99 @@ const economyService = {
         data: { walletBalance: { increment: moderatorShare } },
       });
 
-      // 5. תיעוד בטבלת Transactions (משימה 3 מהאפיון)
       await tx.transaction.create({
         data: {
           userId: option.linkedPlayerId,
           type: 'WINNER_PAYOUT',
           amount: playerShare,
           gameId,
-          description: `Winner payout from question ${questionId}`,
           status: 'SUCCESS',
         },
       });
 
-      return { totalPot, playerShare, moderatorShare };
+      return { totalPot: totalPot.toFixed(2), playerShare, moderatorShare };
     });
+  },
+
+  // --- פרק 2: חלוקת קופה רגילה (שיטת היחידות) ---
+  async processStandardPotDistribution(questionId, gameId, moderatorId) {
+    return await prisma.$transaction(async (tx) => {
+      const totalWagers = await tx.userAnswer.aggregate({
+        where: { questionId, option: { isCorrect: false } },
+        _sum: { wager: true },
+      });
+
+      const totalPot = totalWagers._sum.wager || new Prisma.Decimal(0);
+      if (totalPot.lte(0)) return { success: true };
+
+      const players = await tx.gameParticipant.findMany({
+        where: { gameId, role: 'PLAYER' },
+      });
+
+      if (players.length === 0) {
+        // אם אין שחקנים, המנחה לוקח הכל
+        await tx.user.update({
+          where: { id: moderatorId },
+          data: { walletBalance: { increment: totalPot.toFixed(2) } },
+        });
+        return {
+          totalPot: totalPot.toFixed(2),
+          hostShare: totalPot.toFixed(2),
+        };
+      }
+
+      const totalUnits = players.length * 1.0 + 1.15;
+      const baseShare = totalPot.div(totalUnits).toFixed(2);
+
+      for (const player of players) {
+        await tx.user.update({
+          where: { id: player.userId },
+          data: { walletBalance: { increment: baseShare } },
+        });
+        await tx.gameParticipant.update({
+          where: { id: player.id },
+          data: { score: { increment: baseShare } },
+        });
+      }
+
+      const totalGivenToPlayers = new Prisma.Decimal(baseShare).mul(
+        players.length
+      );
+      const hostShare = totalPot.minus(totalGivenToPlayers).toFixed(2);
+
+      await tx.user.update({
+        where: { id: moderatorId },
+        data: { walletBalance: { increment: hostShare } },
+      });
+
+      return { totalPot: totalPot.toFixed(2), baseShare, hostShare };
+    });
+  },
+
+  // --- פרק 3: בונוס 125% לצופים ---
+  async payoutCorrectViewers(questionId, correctOptionId, gameId) {
+    const correctAnswers = await prisma.userAnswer.findMany({
+      where: { questionId, selectedOptionId: correctOptionId },
+    });
+
+    for (const answer of correctAnswers) {
+      const reward = answer.wager.mul(1.25).toFixed(2);
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: answer.userId },
+          data: { walletBalance: { increment: reward } },
+        }),
+        prisma.transaction.create({
+          data: {
+            userId: answer.userId,
+            type: 'EARN',
+            amount: reward,
+            gameId,
+            status: 'SUCCESS',
+          },
+        }),
+      ]);
+    }
   },
 };
 

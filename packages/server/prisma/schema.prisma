@@ -23,7 +23,7 @@ model User {
   facebookId       String?           @unique
   
   // שדות ארנק
-  walletBalance Decimal  @default(1000.00) @db.Decimal(10, 2)
+  walletBalance Float @default(1000.00)
   isFirstPurchase  Boolean           @default(true)
   stripeCustomerId String?           @unique @map("stripe_customer_id")
 
@@ -161,7 +161,7 @@ model GameParticipant {
   gameId       String   @map("game_id")
   userId       String   @map("user_id")
   role         UserRole
-  score   Decimal @default(0.00) @db.Decimal(10, 2)  
+  score Float @default(0.00) 
   
   joinedAt     DateTime @default(now()) @map("joined_at")
   game         Game     @relation(fields: [gameId], references: [id])
@@ -202,7 +202,7 @@ model UserAnswer {
   userId           String         @map("user_id")
   questionId       String         @map("question_id")
   selectedOptionId String         @map("selected_option_id")
-  wager            Int            @default(0)
+  wager Float @default(0.00)
   createdAt        DateTime       @default(now()) @map("created_at")
   question         Question       @relation(fields: [questionId], references: [id])
   option           QuestionOption @relation(fields: [selectedOptionId], references: [id])
@@ -216,7 +216,7 @@ model UserPoint {
   id            String       @id @default(uuid())
   userId        String       @map("user_id")
   pointType     PointType    @map("point_type")
-amount        Decimal      @db.Decimal(10, 2)
+  amount        Decimal      @db.Decimal(10, 2)
   receivedAt    DateTime     @default(now()) @map("received_at")
   transactionId String?      @map("transaction_id")
   gameId        String?      @map("game_id")
@@ -233,7 +233,7 @@ model Transaction {
   type          TransactionType
   status        TransactionStatus @default(PENDING)
   currency      CurrencyType      @default(COIN)
-amount        Decimal           @db.Decimal(10, 2)
+  amount        Decimal           @db.Decimal(10, 2)
   gameId        String?           @map("game_id")
   metadata      Json?
   description   String?

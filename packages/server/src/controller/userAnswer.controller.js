@@ -12,10 +12,16 @@ const userAnswerController = {
           .json({ error: 'חסרים שדות: questionId, selectedOptionId' });
       }
 
+      // ודא שה-wager הוא מספר תקין
+      const wagerValue = parseFloat(wager);
+      if (isNaN(wagerValue) || wagerValue < 0) {
+        return res.status(400).json({ error: 'ערך wager לא תקין' });
+      }
+
       const answer = await userAnswerService.submitAnswer(userId, {
         questionId,
         selectedOptionId,
-        wager: wager || 0,
+        wager: wagerValue, // שליחה כ-number, הסרוויס ידאג להמרה
       });
 
       res.status(201).json({ message: 'התשובה התקבלה', answer });
