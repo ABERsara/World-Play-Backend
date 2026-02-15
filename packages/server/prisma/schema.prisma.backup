@@ -1,4 +1,3 @@
-// ✅ schema.prisma - עדכון לתמיכה במטבעות עשרוניים
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
@@ -23,9 +22,8 @@ model User {
   googleId         String?           @unique
   facebookId       String?           @unique
   
-  // ✅ שדות ארנק - עדכון לתמיכה עשרונית (10 ספרות כולל, 2 אחרי הנקודה)
-  walletBalance    Decimal           @default(1000.00) @db.Decimal(10, 2)
-  walletDiamonds   Decimal           @default(0.00) @db.Decimal(10, 2)
+  // שדות ארנק
+  walletBalance Decimal  @default(1000.00) @db.Decimal(10, 2)
   isFirstPurchase  Boolean           @default(true)
   stripeCustomerId String?           @unique @map("stripe_customer_id")
 
@@ -121,7 +119,7 @@ model CreditCard {
 }
 
 model Stream {
-  id                 String       @id @default(uuid())
+    id                 String       @id @default(uuid())
   title              String
   hostId             String       @map("host_id")
   startTime          DateTime?    @map("start_time")
@@ -163,9 +161,7 @@ model GameParticipant {
   gameId       String   @map("game_id")
   userId       String   @map("user_id")
   role         UserRole
-  
-  // ✅ עדכון ציון לעשרוני
-  score        Decimal  @default(0.00) @db.Decimal(10, 2)
+  score   Decimal @default(0.00) @db.Decimal(10, 2)  
   
   joinedAt     DateTime @default(now()) @map("joined_at")
   game         Game     @relation(fields: [gameId], references: [id])
@@ -206,10 +202,7 @@ model UserAnswer {
   userId           String         @map("user_id")
   questionId       String         @map("question_id")
   selectedOptionId String         @map("selected_option_id")
-  
-  // ✅ עדכון הימור לעשרוני
-  wager            Decimal        @default(0.00) @db.Decimal(10, 2)
-  
+  wager            Int            @default(0)
   createdAt        DateTime       @default(now()) @map("created_at")
   question         Question       @relation(fields: [questionId], references: [id])
   option           QuestionOption @relation(fields: [selectedOptionId], references: [id])
@@ -223,7 +216,7 @@ model UserPoint {
   id            String       @id @default(uuid())
   userId        String       @map("user_id")
   pointType     PointType    @map("point_type")
-  amount        Decimal      @db.Decimal(10, 2)
+amount        Decimal      @db.Decimal(10, 2)
   receivedAt    DateTime     @default(now()) @map("received_at")
   transactionId String?      @map("transaction_id")
   gameId        String?      @map("game_id")
@@ -240,7 +233,7 @@ model Transaction {
   type          TransactionType
   status        TransactionStatus @default(PENDING)
   currency      CurrencyType      @default(COIN)
-  amount        Decimal           @db.Decimal(10, 2)
+amount        Decimal           @db.Decimal(10, 2)
   gameId        String?           @map("game_id")
   metadata      Json?
   description   String?
