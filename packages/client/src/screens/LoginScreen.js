@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import PropTypes from 'prop-types'; //
 import { authService } from '../services/auth.service';
+import { connectSocket } from '../services/socket.service';
 
 const LoginScreen = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
@@ -23,8 +24,13 @@ const LoginScreen = ({ onLoginSuccess }) => {
     }
 
     setLoading(true);
+
     try {
       const data = await authService.login(email, password);
+
+      // כאן התיקון: הפונקציה כבר דואגת לשלוף את הטוקן החדש ולחבר את הסוקט
+      await connectSocket();
+      console.log('🔌 Socket connected via connectSocket function');
       onLoginSuccess({
         id: data.user.id,
         email: data.user.email,

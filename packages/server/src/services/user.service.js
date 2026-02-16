@@ -76,18 +76,11 @@ const userService = {
         id: true,
         username: true,
         email: true,
-        role: true,
-        phoneNumber: true,
+        walletBalance: true, // שימוש בשם השדה הנכון
+        isFirstPurchase: true,
         isActive: true,
-        createdAt: true,
-        // השדות שראינו שחסרים בפוסטמן:
-        walletCoins: true, // 🔥 חיוני ליתרה
-        walletDiamonds: true, // 🔥 חיוני ליהלומים
-        isFirstPurchase: true, // 🔥 חיוני לבונוס
-        points: true,
       },
     });
-
     if (!user) throw new Error('User not found');
     return user;
   },

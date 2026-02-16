@@ -14,6 +14,7 @@ import chatRoutes from './routes/chat.router.js';
 import notificationRoutes from './routes/notification.routes.js';
 import configRoutes from './routes/config.routes.js';
 import statusRoutes from './routes/status.routes.js';
+import userAnswerRoutes from './routes/userAnswer.routes.js';
 // import corsOptions from './config/corsOptions.js';
 import { initializeSocketIO } from './services/socket.service.js';
 
@@ -45,6 +46,7 @@ app.use(
 app.use('/', statusRoutes); // דף הבית של ה-API
 app.use('/api/config', configRoutes); // קונפיגורציית המדיה
 app.use('/api/users', userRoutes);
+app.use('/api/user-answers', userAnswerRoutes); // השורה שפותרת את השגיאה <
 app.use('/api/finance', financeRoutes);
 app.use('/api/streams', streamRoutes);
 app.use('/api/games', gameRoutes);
@@ -81,7 +83,7 @@ const io = initializeSocketIO(server);
 app.set('io', io);
 
 // עדכון השורה הזו:
-server.listen(PORT, '0.0.0.0', async () => { 
+server.listen(PORT, '0.0.0.0', async () => {
   console.log(`✅ Main Server running on port ${PORT}`);
   await checkMediaServer();
 });
