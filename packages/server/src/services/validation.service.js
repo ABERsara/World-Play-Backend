@@ -157,6 +157,25 @@ export const mergeUniqueIds = (...arrays) => {
   return [...new Set(combined)];
 };
 
+export const ensureQuestionIsBetable = async (questionId) => {
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    include: { game: true },
+  });
+
+  if (!question) throw new Error('השאלה לא נמצאה');
+  if (question.isResolved) throw new Error('השאלה כבר נפתרה וסגורה ');
+  if (question.game.status !== 'ACTIVE')
+    throw new Error('המשחק אינו פעיל כרגע');
+
+  return question;
+};
+
+export const validateUserFunds = (user, amount) => {
+  if (Number(user.walletBalance) < amount) {
+    throw new Error('אין מספיק מטבעות בארנק לביצוע ההימור [cite: 1, 46]');
+  }
+};
 // ייצוא אובייקט ברירת מחדל למי שמעדיף לייבא את הכל יחד
 export default {
   ensureGameExists,

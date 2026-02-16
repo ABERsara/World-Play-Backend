@@ -6,7 +6,7 @@ const gameController = {
   async createGame(req, res) {
     try {
       const userId = req.user.id;
-const { title, description, moderatorId } = req.body;
+      const { title, description, moderatorId } = req.body;
 
       if (!title) {
         return res.status(400).json({
@@ -22,10 +22,9 @@ const { title, description, moderatorId } = req.body;
       });
 
       res.status(201).json({ message: 'המשחק נוצר בהצלחה', game });
-      
     } catch (error) {
       console.error('Create Game Error:', error);
-      
+
       // טיפול בשגיאות מפתח זר (P2003) - נשאר רלוונטי רק למנחה
       if (error.code === 'P2003') {
         const fieldName = error.meta?.field_name || '';
@@ -36,12 +35,12 @@ const { title, description, moderatorId } = req.body;
             .json({ error: 'המשתמש שצוין כמנחה (moderatorId) לא נמצא במערכת' });
         }
       }
-      
+
       res.status(500).json({ error: 'שגיאה ביצירת המשחק' });
     }
   },
 
-  // PATCH /api/games/:id/status
+  // PUT /api/games/:id/status
   async updateStatus(req, res) {
     try {
       const { id } = req.params;
@@ -66,6 +65,16 @@ const { title, description, moderatorId } = req.body;
         statusValue // העברת הערך הנכון ל-Service
       );
 
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('game_status_update', {
+          gameId: id,
+          status: statusValue,
+        });
+        console.log(
+          `📢 Broadcasted status update for game ${id}: ${statusValue}`
+        );
+      }
       // ... שאר הקוד (Socket.io וכו')
       res.status(200).json({ message: 'סטטוס המשחק עודכן', game: updatedGame });
     } catch (error) {

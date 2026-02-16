@@ -90,10 +90,13 @@ export const handleWebhook = async (req, res) => {
         `✅ SUCCESS: User ${userId} now has ${result.walletBalance} coins`
       );
 
+      // handleWebhook.js
+
       const io = req.app.get('io');
       if (io) {
-        io.to(userId).emit('wallet:updated', {
-          newBalance: result.walletBalance,
+        io.to(userId).emit('balance_update', {
+          walletBalance: Number(result.walletBalance),
+          scoresByGame: {},
         });
       }
     } catch (error) {

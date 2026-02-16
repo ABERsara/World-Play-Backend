@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,17 @@ import {
 import PropTypes from 'prop-types';
 import { useStripe } from '@stripe/stripe-react-native';
 import { authService } from '../services/auth.service';
-import { socket, connectSocket } from '../services/socket.service';
-
+import { useSelector, useDispatch } from 'react-redux';
+import { updateBalances } from '../store/slices/walletSlice';
 const ShopScreen = ({ userId, onLogout }) => {
+  const dispatch = useDispatch();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
-  const [coins, setCoins] = useState(0);
   const [fetchingBalance, setFetchingBalance] = useState(true);
 
+  // שליפת היתרה מה-Redux הגלובלי (מתעדכן אוטומטית מהסוקט)
+  const coins = useSelector((state) => state.wallet.walletBalance || 0);
+  const scores = useSelector((state) => state.wallet.scoresByGame || {});
   useEffect(() => {
     const initializeScreen = async () => {
       try {
@@ -29,7 +32,7 @@ const ShopScreen = ({ userId, onLogout }) => {
           return;
         }
 
-        // 1. שליפת היתרה
+        // 1. שליפה ראשונית מה-API (כדי לסנכרן את הסטור בעליה)
         const response = await fetch('http://10.0.2.2:8080/api/users/profile', {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -39,39 +42,15 @@ const ShopScreen = ({ userId, onLogout }) => {
           onLogout();
           return;
         }
-
         const data = await response.json();
-        console.log('📊 Profile data:', data);
+        console.log('📥 Data from server:', data); // תוסיפי את הלוג הזה כדי לראות מה חוזר ב-Console
 
-        if (data.walletBalance !== undefined) {
-          setCoins(data.walletBalance);
-          console.log('💰 Current balance:', data.walletBalance);
-        }
-
-        // 2. חיבור Socket רק אחרי שקיבלנו את היתרה
-        console.log('🔌 Connecting socket for userId:', userId);
-        const connectedSocket = await connectSocket();
-
-        if (connectedSocket) {
-          console.log('✅ Socket connected successfully');
-
-          // 3. הצטרפות לחדר האישי של המשתמש
-          connectedSocket.emit('user:join', { userId });
-
-          // 4. האזנה לעדכוני ארנק
-          connectedSocket.on('wallet:updated', (updateData) => {
-            console.log('💰 Wallet update received:', updateData);
-            if (updateData.newBalance !== undefined) {
-              setCoins(updateData.newBalance);
-              Alert.alert(
-                'הטעינה הצליחה! 🎉',
-                `היתרה החדשה: ${updateData.newBalance} מטבעות`
-              );
-            }
-          });
-        } else {
-          console.warn('⚠️ Socket connection failed');
-        }
+        dispatch(
+          updateBalances({
+            walletCoins: data.walletCoins, // זה יעדכן ל-1000
+            scoresByGame: data.scoresByGame || {},
+          })
+        );
       } catch (e) {
         console.error('❌ Initialization error:', e);
       } finally {
@@ -80,16 +59,7 @@ const ShopScreen = ({ userId, onLogout }) => {
     };
 
     initializeScreen();
-
-    // ניקוי בעת יציאה מהמסך
-    return () => {
-      if (socket) {
-        socket.off('wallet:updated');
-        console.log('🔌 Socket listeners cleaned up');
-      }
-    };
-  }, [userId, onLogout]);
-
+  }, [userId]); // רק בטעינה הראשונה
   const buyPackage = async (amount) => {
     setLoading(true);
     try {
@@ -140,7 +110,41 @@ const ShopScreen = ({ userId, onLogout }) => {
       setLoading(false);
     }
   };
+  const triggerTestAnswer = async () => {
+    try {
+      const token = await authService.getToken();
 
+      // שימוש ב-fetch ישיר כדי למנוע את השגיאה Property 'api' doesn't exist
+      const response = await fetch(
+        'http://10.0.2.2:8080/api/user-answers/submit',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            questionId: '28a886da-89d0-4bfa-b020-ff7e66c3aac7',
+            selectedOptionId: 'f3e5d96c-1be2-4bdd-9de1-cbdf6e44a663',
+            wager: 10,
+          }),
+        }
+      );
+
+      // בדיקה אם השרת החזיר HTML (שגיאת 404 או 500) במקום JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(
+          'השרת החזיר שגיאה (HTML). ודאי שהנתיב /api/user-answers/submit קיים ב-Routes'
+        );
+      }
+
+      const data = await response.json();
+      console.log('✅ השרת עיבד את התשובה:', data);
+    } catch (err) {
+      Alert.alert('שגיאה בבדיקה', err.message);
+    }
+  };
   if (fetchingBalance) {
     return (
       <View style={styles.container}>
@@ -158,6 +162,16 @@ const ShopScreen = ({ userId, onLogout }) => {
 
       <Text style={styles.title}>🪙 חנות מטבעות</Text>
       <Text style={styles.balance}>יתרה: {coins} מטבעות</Text>
+      <Text style={styles.balance}>
+        ניקוד פעיל: {Object.values(scores)[0] || 0} נקודות
+      </Text>
+      {/* --- כפתור בדיקה זמני לסנכרון לייב --- */}
+      <TouchableOpacity style={styles.testButton} onPress={triggerTestAnswer}>
+        <Text style={styles.testButtonText}>
+          🎯 בדיקת סנכרון (הימור 10 מטבעות)
+        </Text>
+      </TouchableOpacity>
+      {/* ------------------------------------- */}
 
       <View style={styles.packageContainer}>
         {/* חבילה 1 */}
@@ -262,6 +276,20 @@ const styles = StyleSheet.create({
   bonusText: { fontSize: 12, color: '#2ed573', marginTop: 5 },
   loadingOverlay: { marginTop: 20, alignItems: 'center' },
   loadingText: { color: '#fff', marginTop: 10 },
+  testButton: {
+    backgroundColor: '#535c68',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#ffa502',
+    borderStyle: 'dashed',
+  },
+  testButtonText: {
+    color: '#ffa502',
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
 });
 
 export default ShopScreen;
