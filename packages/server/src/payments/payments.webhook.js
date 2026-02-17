@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const handleWebhook = async (req, res) => {
+  console.log('🔔 Webhook hit! Event type:', req.body.type);
   const sig = req.headers['stripe-signature'];
 
   let event;
@@ -18,7 +19,10 @@ export const handleWebhook = async (req, res) => {
     console.error('❌ Webhook signature failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-
+  console.log(
+    '📬 Full Event Data:',
+    JSON.stringify(event.data.object.metadata)
+  );
   if (event.type === 'payment_intent.succeeded') {
     const intent = event.data.object;
 
@@ -45,7 +49,6 @@ export const handleWebhook = async (req, res) => {
         }
 
         const isFirst = user.isFirstPurchase;
-
         const coinsToAdd = isFirst ? baseCoins * 2 : baseCoins;
 
         const updatedUser = await tx.user.update({
@@ -90,20 +93,51 @@ export const handleWebhook = async (req, res) => {
         `✅ SUCCESS: User ${userId} now has ${result.walletBalance} coins`
       );
 
-      // handleWebhook.js
-
+      // ========================================
+      // 🔧 תיקון קריטי: שליחת Socket Event
+      // ========================================
       const io = req.app.get('io');
       if (io) {
-        io.to(userId).emit('balance_update', {
-          walletBalance: Number(result.walletBalance),
-          scoresByGame: {},
+        // ✅ המרת Decimal ל-Number לפני שליחה
+        const balanceToSend =
+          typeof result.walletBalance === 'object'
+            ? parseFloat(result.walletBalance)
+            : result.walletBalance;
+
+        console.log(
+          `📡 Emitting wallet update to user ${userId}:`,
+          balanceToSend
+        );
+
+        // שליחה לחדר האישי של המשתמש
+        io.to(userId).emit('wallet:updated', {
+          newBalance: balanceToSend,
+          timestamp: new Date().toISOString(),
+          source: 'payment_webhook',
         });
+
+        console.log('✅ Socket event emitted successfully');
+      } else {
+        console.warn(
+          '⚠️ Socket.IO instance not found - real-time update skipped'
+        );
       }
+
+      // ========================================
+      // 🔧 תיקון נוסף: תגובה מהירה ל-Stripe
+      // ========================================
+      res.status(200).json({
+        received: true,
+        userId,
+        newBalance: result.walletBalance,
+      });
     } catch (error) {
       console.error('❌ WEBHOOK ERROR:', error.message);
       return res.status(500).json({ error: 'Internal processing error' });
     }
+  } else {
+    // אירועים אחרים של Stripe
+    console.log(`ℹ️ Unhandled event type: ${event.type}`);
+    res.json({ received: true });
   }
-
-  res.json({ received: true });
 };
