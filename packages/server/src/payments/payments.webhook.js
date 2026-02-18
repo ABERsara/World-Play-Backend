@@ -89,9 +89,6 @@ export const handleWebhook = async (req, res) => {
       console.log(
         `✅ SUCCESS: User ${userId} now has ${result.walletBalance} coins`
       );
-
-      // handleWebhook.js
-
       const io = req.app.get('io');
       if (io) {
         io.to(userId).emit('balance_update', {

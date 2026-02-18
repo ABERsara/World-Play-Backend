@@ -28,7 +28,6 @@ const LoginScreen = ({ onLoginSuccess }) => {
     try {
       const data = await authService.login(email, password);
 
-      // כאן התיקון: הפונקציה כבר דואגת לשלוף את הטוקן החדש ולחבר את הסוקט
       await connectSocket();
       console.log('🔌 Socket connected via connectSocket function');
       onLoginSuccess({

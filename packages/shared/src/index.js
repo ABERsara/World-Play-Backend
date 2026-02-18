@@ -10,7 +10,7 @@ export const CreateGameSchema = z.object({
 // סכמה להצטרפות למשחק
 export const JoinGameSchema = z.object({
   gameId: z.string().uuid('מזהה משחק לא תקין'),
-  role: z.enum(['PLAYER', 'VIEWER']).optional().default('VIEWER'), // ולידציה גם על התפקיד
+  role: z.enum(['PLAYER', 'VIEWER']).optional().default('VIEWER'),
 });
 
 export const SubmitAnswerSchema = z.object({

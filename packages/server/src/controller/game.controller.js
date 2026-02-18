@@ -44,13 +44,11 @@ const gameController = {
   async updateStatus(req, res) {
     try {
       const { id } = req.params;
-      // שינוי: קבלת הערך גם מ-status וגם מ-newStatus ליתר ביטחון
       let statusValue = req.body.status || req.body.newStatus;
       const userId = req.user.id;
 
       const validStatuses = ['WAITING', 'ACTIVE', 'FINISHED'];
 
-      // ניקוי רווחים והפיכה לאותיות גדולות
       if (statusValue) statusValue = statusValue.trim().toUpperCase();
 
       if (!statusValue || !validStatuses.includes(statusValue)) {
@@ -62,7 +60,7 @@ const gameController = {
       const updatedGame = await gameService.updateGameStatus(
         id,
         userId,
-        statusValue // העברת הערך הנכון ל-Service
+        statusValue
       );
 
       const io = req.app.get('io');
@@ -72,10 +70,9 @@ const gameController = {
           status: statusValue,
         });
         console.log(
-          `📢 Broadcasted status update for game ${id}: ${statusValue}`
+          ` Broadcasted status update for game ${id}: ${statusValue}`
         );
       }
-      // ... שאר הקוד (Socket.io וכו')
       res.status(200).json({ message: 'סטטוס המשחק עודכן', game: updatedGame });
     } catch (error) {
       console.error('Update Status Error:', error); // הוספת שימוש במשתנה error

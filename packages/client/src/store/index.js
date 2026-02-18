@@ -5,7 +5,7 @@ import { socket } from '../services/socket.service';
 
 export const store = configureStore({
   reducer: {
-    wallet: walletReducer, // השם כאן קובע את הגישה ב-useSelector
+    wallet: walletReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(socketMiddleware(socket)),
