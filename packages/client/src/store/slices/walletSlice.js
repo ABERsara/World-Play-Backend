@@ -26,9 +26,11 @@ const walletSlice = createSlice({
       }
       // 3. עדכון ניקוד - תרחיש ב': עדכון בודד מהסוקט (Live Update)
       else if (gameId && pointsInGame !== undefined) {
-        // אנחנו מוודאים שהאובייקט קיים לפני ההשמה
-        if (!state.scoresByGame) state.scoresByGame = {};
-        state.scoresByGame[gameId] = pointsInGame;
+        // יצירת עותק חדש של האובייקט עם הערך המעודכן
+        state.scoresByGame = {
+          ...state.scoresByGame,
+          [gameId]: pointsInGame,
+        };
       }
     },
     // פונקציה לאיפוס למקרה של התנתקות
