@@ -1,7 +1,7 @@
 //game.service.js
 import { PrismaClient } from '@prisma/client';
 import permissionsService from './permissions.service.js';
-import * as gameRules from '../services/validation.service.js'; // ודאי שהקובץ הזה קיים בתיקיית services
+import * as gameRules from '../services/validation.service.js';
 const prisma = new PrismaClient();
 
 const gameService = {
@@ -10,21 +10,19 @@ const gameService = {
    * המארח שולח רק פרטי משחק, אנחנו דואגים לשאר.
    */
   async createGame(userId, { title, description, moderatorId }) {
-    
-    // בדיקה שהמארח פנוי (לפי הלוגיקה שלך)
-    await gameRules.validateHostIsAvailable(userId); // (הערה: תוודאי שיש לך את זה או תשימי בהערה בינתיים)
+    // בדיקה שהמארח פנוי
+    await gameRules.validateHostIsAvailable(userId);
 
     // --- טרנזקציה: יצירת סטרים + משחק + משתתף במכה אחת ---
     return await prisma.$transaction(async (tx) => {
-      
       // 1. יצירת סטרים אוטומטית (מוסתר מהמשתמש)
-      // לפי האפיון: הסטרים מתחיל ב-WAITING
+      //  הסטרים מתחיל ב-WAITING
       const newStream = await tx.stream.create({
         data: {
           title: `Stream for: ${title}`,
           hostId: userId,
-          status: 'WAITING'
-        }
+          status: 'WAITING',
+        },
       });
 
       // 2. יצירת המשחק (מקושר לסטרים שיצרנו הרגע)
@@ -32,10 +30,10 @@ const gameService = {
         data: {
           title,
           description,
-          streamId: newStream.id, // <--- הקישור הקריטי!
+          streamId: newStream.id,
           moderatorId: moderatorId || null,
           hostId: userId,
-          status: 'WAITING'
+          status: 'WAITING',
         },
       });
 
@@ -52,7 +50,7 @@ const gameService = {
       // כדי שהקליינט ידע לאן להתחבר ב-WebRTC
       return {
         ...newGame,
-        streamId: newStream.id 
+        streamId: newStream.id,
       };
     });
   },

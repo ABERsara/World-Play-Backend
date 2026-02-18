@@ -2,7 +2,7 @@
 import { io } from 'socket.io-client';
 import { authService } from './auth.service';
 
-const SOCKET_URL = 'http://10.0.2.2:8080'; // עבור Android Emulator
+const SOCKET_URL = 'http://10.0.2.2:8080';
 export let socket = null;
 
 export const connectSocket = async () => {
@@ -35,7 +35,6 @@ export const connectSocket = async () => {
 
 export const emitPromise = (type, data) => {
   return new Promise((resolve, reject) => {
-    // במקום async פנימי, אנחנו קוראים לחיבור ואז ממשיכים ב-then
     const getSocket = socket ? Promise.resolve(socket) : connectSocket();
 
     getSocket
@@ -56,7 +55,7 @@ export const emitPromise = (type, data) => {
           }
         });
       })
-      .catch((err) => reject(err)); // תופס שגיאות חיבור
+      .catch((err) => reject(err));
   });
 };
 export const disconnectSocket = () => {

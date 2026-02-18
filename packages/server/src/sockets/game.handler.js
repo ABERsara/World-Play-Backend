@@ -10,14 +10,11 @@ export const registerGameHandlers = (io, socket) => {
 
   // --- אירוע: הצטרפות לחדר ---
   socket.on('join_room', async (payload) => {
-    // מקבלים את כל האובייקט (payload)
-
     // שלב 1: ולידציה מבנית (Zod) - השומר בכניסה
     // אנחנו בודקים את המידע שהגיע מהלקוח מול הסכמה המשותפת
     const validationResult = JoinGameSchema.safeParse(payload);
 
     if (!validationResult.success) {
-      // התיקון: הוספת סימן שאלה (?) אחרי user ושימוש בערך ברירת מחדל
       const username = user?.username || 'Unknown/Guest';
 
       console.warn(
@@ -34,7 +31,7 @@ export const registerGameHandlers = (io, socket) => {
     // מעכשיו משתמשים בנתונים הנקיים שעברו ולידציה
     const { gameId, role } = validationResult.data;
 
-    // שלב 2: ולידציה עסקית (DB) - הלוגיקה הקיימת שלך
+    // שלב 2: ולידציה עסקית (DB)
 
     if (socket.rooms.has(gameId)) {
       logger.info(`User ${user.username} is already in socket room ${gameId}`);
@@ -45,13 +42,10 @@ export const registerGameHandlers = (io, socket) => {
     }
 
     try {
-      // המשך הלוגיקה המקורית שלך נשאר זהה לחלוטין!
-      // ההבדל היחיד הוא שאנחנו בטוחים ש-gameId הוא באמת מחרוזת תקינה
-
       const validation = await gameRules.validateJoinEligibility(
         gameId,
         user.id,
-        role || 'VIEWER' // ברירת מחדל אם לא הוגדר בסכמה
+        role || 'VIEWER'
       );
 
       if (validation.status === 'ALREADY_JOINED') {
@@ -94,15 +88,12 @@ export const registerGameHandlers = (io, socket) => {
     }
   });
 
-  // בתוך registerGameHandlers, מתחת ל-join_room
   socket.on('place_bet', async (payload) => {
     try {
       const { gameId, questionId, optionId, amount } = payload;
       const userId = socket.user.id;
 
-      console.log(
-        `🎲 Bet Received via Socket: User ${userId} on Game ${gameId}`
-      );
+      console.log(` Bet Received via Socket: User ${userId} on Game ${gameId}`);
 
       // עדכון ה-DB בטרנזקציה
       await prisma.$transaction([

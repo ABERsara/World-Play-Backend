@@ -9,7 +9,6 @@ export const initializeSocketIO = (httpServer) => {
   io.use(socketAuth);
 
   io.on('connection', (socket) => {
-    // זה החלק שהיה חסר! מחברים את המאזינים של המשחק לסוקט החדש
     registerGameHandlers(io, socket);
 
     const user = socket.user;

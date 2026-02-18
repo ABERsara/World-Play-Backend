@@ -92,10 +92,6 @@ export const handleWebhook = async (req, res) => {
       console.log(
         `✅ SUCCESS: User ${userId} now has ${result.walletBalance} coins`
       );
-
-      // ========================================
-      // 🔧 תיקון קריטי: שליחת Socket Event
-      // ========================================
       const io = req.app.get('io');
       if (io) {
         // ✅ המרת Decimal ל-Number לפני שליחה

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import PropTypes from 'prop-types';
@@ -11,8 +11,6 @@ const GameScreen = ({ gameId }) => {
 
   const walletBalance = useSelector((state) => state.wallet.walletBalance || 0);
   const score = useSelector((state) => {
-    console.log('Current Store Scores:', state.wallet.scoresByGame);
-    console.log('Looking for GameID:', gameId);
     return state.wallet.scoresByGame?.[gameId] || 0;
   });
   // נתונים "קשיחים" לצורך הבדיקה
@@ -51,7 +49,6 @@ const GameScreen = ({ gameId }) => {
     // 2. הגדרת מאזין לעדכונים חיים (Socket)
     const handleBalanceUpdate = (data) => {
       if (data.gameId === gameId) {
-        console.log('📱 GameScreen received live update!');
         dispatch(
           updateBalances({
             walletCoins: data.walletCoins,
@@ -70,7 +67,6 @@ const GameScreen = ({ gameId }) => {
   }, [gameId, dispatch]);
 
   const handleSelectOption = (optionId) => {
-    console.log('🚀 Emitting bet for game:', gameId);
     socket.emit('place_bet', {
       gameId: gameId,
       questionId: '28a886da-89d0-4bfa-b020-ff7e66c3aac7',

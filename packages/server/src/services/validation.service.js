@@ -176,11 +176,10 @@ export const validateUserFunds = (user, amount) => {
     throw new Error('אין מספיק מטבעות בארנק לביצוע ההימור [cite: 1, 46]');
   }
 };
-// ייצוא אובייקט ברירת מחדל למי שמעדיף לייבא את הכל יחד
 export default {
   ensureGameExists,
   ensureStreamExists,
-  ensureUserExists, // וודאי שזה כאן
+  ensureUserExists,
   ensureUserExistsByEmail,
   validateEmailIsUnique,
   validateUserHasNoActiveStream,
@@ -188,6 +187,6 @@ export default {
   validateJoinEligibility,
   validateQuestionData,
   ensureChatParticipantsExist,
-  getSignificantInteractionRules, // חובה להוסיף
-  mergeUniqueIds, // חובה להוסיף
+  getSignificantInteractionRules,
+  mergeUniqueIds,
 };

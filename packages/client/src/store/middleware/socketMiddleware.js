@@ -16,7 +16,6 @@ export const socketMiddleware = () => (store) => {
       });
       console.log('📡 [Middleware] Started listening to balance_update');
     } else {
-      // אם הסוקט עדיין לא נוצר (לפני לוגין), נבדוק שוב עוד שנייה
       setTimeout(setupListener, 1000);
     }
   };
