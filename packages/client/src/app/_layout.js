@@ -9,7 +9,7 @@ export default function RootLayout() {
     <Provider store={store}>
       {/* 2. עטיפה ב-Stripe כדי לאפשר סליקה בכל מקום באפליקציה */}
       <StripeProvider
-        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
         merchantIdentifier="merchant.com.worldplay"
       >
         <Stack
