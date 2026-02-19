@@ -1,6 +1,6 @@
 import { Server } from 'socket.io';
+import { registerGameHandlers } from '../sockets/game.handler.js';
 import { socketAuth } from '../middleware/socketAuth.js';
-
 export const initializeSocketIO = (httpServer) => {
   const io = new Server(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
@@ -9,15 +9,14 @@ export const initializeSocketIO = (httpServer) => {
   io.use(socketAuth);
 
   io.on('connection', (socket) => {
-    const user = socket.user;
+    registerGameHandlers(io, socket);
 
-    // יצירת חדר פרטי למשתמש לפי ה-ID שלו
+    const user = socket.user;
     if (user && user.id) {
       socket.join(user.id);
-      console.log(`✅ User ${user.id} is ready for real-time updates`);
+      console.log(`✅ User ${user.id} joined private room`);
     }
 
-    // ניתוק
     socket.on('disconnect', () => {
       console.log('❌ User disconnected:', socket.id);
     });

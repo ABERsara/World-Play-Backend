@@ -10,91 +10,74 @@ import {
 import PropTypes from 'prop-types';
 import { useStripe } from '@stripe/stripe-react-native';
 import { authService } from '../services/auth.service';
-import { socket, connectSocket } from '../services/socket.service';
+import { useSelector, useDispatch } from 'react-redux';
+import { updateBalances } from '../store/slices/walletSlice';
 
 const ShopScreen = ({ userId, onLogout }) => {
+  const dispatch = useDispatch();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
   const [loading, setLoading] = useState(false);
-  const [coins, setCoins] = useState(0);
   const [fetchingBalance, setFetchingBalance] = useState(true);
+
+  // סנכרון עם Redux - היתרה והניקוד נמשכים מכאן ומתעדכנים אוטומטית מהסוקט
+  const coins = useSelector((state) => state.wallet.walletBalance || 0);
+  const scores = useSelector((state) => state.wallet.scoresByGame || {});
+
+  // ========================================
+  // פונקציה לשליפת נתונים ועדכון הסטור
+  // ========================================
+  const fetchAndSyncBalance = async () => {
+    try {
+      const token = await authService.getToken();
+      if (!token) {
+        onLogout();
+        return;
+      }
+
+      const response = await fetch('http://10.0.2.2:8080/api/users/profile', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        await authService.logout();
+        onLogout();
+        return;
+      }
+
+      const data = await response.json();
+      console.log('📥 Data fetched from server:', data);
+
+      // עדכון ה-Redux Store - זה מה שגורם ל-UI להתעדכן בכל האפליקציה
+      dispatch(
+        updateBalances({
+          walletCoins: data.walletCoins || data.walletBalance,
+          scoresByGame: data.scoresByGame || {},
+        })
+      );
+    } catch (e) {
+      console.error('❌ Fetch balance error:', e);
+    }
+  };
 
   useEffect(() => {
     const initializeScreen = async () => {
-      try {
-        setFetchingBalance(true);
-        const token = await authService.getToken();
-
-        if (!token) {
-          onLogout();
-          return;
-        }
-
-        // 1. שליפת היתרה
-        const response = await fetch('http://10.0.2.2:8080/api/users/profile', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (response.status === 401 || response.status === 403) {
-          await authService.logout();
-          onLogout();
-          return;
-        }
-
-        const data = await response.json();
-        console.log('📊 Profile data:', data);
-
-        if (data.walletBalance !== undefined) {
-          setCoins(data.walletBalance);
-          console.log('💰 Current balance:', data.walletBalance);
-        }
-
-        // 2. חיבור Socket רק אחרי שקיבלנו את היתרה
-        console.log('🔌 Connecting socket for userId:', userId);
-        const connectedSocket = await connectSocket();
-
-        if (connectedSocket) {
-          console.log('✅ Socket connected successfully');
-
-          // 3. הצטרפות לחדר האישי של המשתמש
-          connectedSocket.emit('user:join', { userId });
-
-          // 4. האזנה לעדכוני ארנק
-          connectedSocket.on('wallet:updated', (updateData) => {
-            console.log('💰 Wallet update received:', updateData);
-            if (updateData.newBalance !== undefined) {
-              setCoins(updateData.newBalance);
-              Alert.alert(
-                'הטעינה הצליחה! 🎉',
-                `היתרה החדשה: ${updateData.newBalance} מטבעות`
-              );
-            }
-          });
-        } else {
-          console.warn('⚠️ Socket connection failed');
-        }
-      } catch (e) {
-        console.error('❌ Initialization error:', e);
-      } finally {
-        setFetchingBalance(false);
-      }
+      setFetchingBalance(true);
+      await fetchAndSyncBalance();
+      setFetchingBalance(false);
     };
 
     initializeScreen();
+  }, [userId]);
 
-    // ניקוי בעת יציאה מהמסך
-    return () => {
-      if (socket) {
-        socket.off('wallet:updated');
-        console.log('🔌 Socket listeners cleaned up');
-      }
-    };
-  }, [userId, onLogout]);
-
+  // ========================================
+  // לוגיקת רכישה (Stripe)
+  // ========================================
   const buyPackage = async (amount) => {
+    console.log('Using Key:', process.env);
     setLoading(true);
     try {
       const token = await authService.getToken();
-
       console.log('💳 Initiating purchase:', { userId, coins: amount });
 
       const response = await fetch(
@@ -110,8 +93,6 @@ const ShopScreen = ({ userId, onLogout }) => {
       );
 
       const data = await response.json();
-      console.log('💳 Payment sheet data received');
-
       const { paymentIntent, ephemeralKey, customer } = data;
 
       const { error: initError } = await initPaymentSheet({
@@ -128,16 +109,53 @@ const ShopScreen = ({ userId, onLogout }) => {
       const { error: paymentError } = await presentPaymentSheet();
 
       if (paymentError) {
-        console.log('❌ Payment cancelled or failed:', paymentError.message);
+        console.log('❌ Payment cancelled:', paymentError.message);
       } else {
-        console.log('✅ Payment completed successfully');
+        console.log('✅ Payment successful');
         Alert.alert('בהצלחה!', 'התשלום בוצע. היתרה תתעדכן תוך שניות...');
+
+        // שליפה יזומה לגיבוי לאחר תשלום
+        setTimeout(fetchAndSyncBalance, 3000);
       }
     } catch (error) {
       console.error('❌ Payment error:', error);
       Alert.alert('שגיאה', error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ========================================
+  // בדיקת סנכרון הימור (המרה מיידית)
+  // ========================================
+  const triggerTestAnswer = async () => {
+    try {
+      const token = await authService.getToken();
+      const response = await fetch(
+        'http://10.0.2.2:8080/api/user-answers/submit',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            questionId: '28a886da-89d0-4bfa-b020-ff7e66c3aac7',
+            selectedOptionId: 'f3e5d96c-1be2-4bdd-9de1-cbdf6e44a663',
+            wager: 10,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      console.log('✅ Server processed answer:', data);
+
+      // אם השרת החזיר תשובה תקינה, נרענן את היתרה בסטור
+      if (data.answer) {
+        fetchAndSyncBalance();
+      }
+    } catch (err) {
+      Alert.alert('שגיאה בבדיקה', err.message);
     }
   };
 
@@ -157,42 +175,40 @@ const ShopScreen = ({ userId, onLogout }) => {
       </TouchableOpacity>
 
       <Text style={styles.title}>🪙 חנות מטבעות</Text>
-      <Text style={styles.balance}>יתרה: {coins} מטבעות</Text>
+
+      <View style={styles.statsContainer}>
+        <Text style={styles.balance}>יתרה: {coins} מטבעות</Text>
+        <Text style={styles.scoreText}>
+          ניקוד פעיל: {Object.values(scores)[0] || 0} נקודות
+        </Text>
+      </View>
+
+      <TouchableOpacity style={styles.testButton} onPress={triggerTestAnswer}>
+        <Text style={styles.testButtonText}>
+          🎯 בדיקת סנכרון (הימור 10 מטבעות)
+        </Text>
+      </TouchableOpacity>
 
       <View style={styles.packageContainer}>
-        {/* חבילה 1 */}
-        <TouchableOpacity
-          style={styles.packageCard}
+        <PackageCard
+          title="10 מטבעות"
+          price="₪10"
           onPress={() => buyPackage(10)}
           disabled={loading}
-        >
-          <Text style={styles.packageTitle}>10 מטבעות</Text>
-          <Text style={styles.packagePrice}>₪10</Text>
-        </TouchableOpacity>
-
-        {/* חבילה 2 - הכי פופולרית */}
-        <TouchableOpacity
-          style={[styles.packageCard, styles.popular]}
+        />
+        <PackageCard
+          title="50 מטבעות"
+          price="₪50"
+          popular
           onPress={() => buyPackage(50)}
           disabled={loading}
-        >
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>הכי פופולרי!</Text>
-          </View>
-          <Text style={styles.packageTitle}>50 מטבעות</Text>
-          <Text style={styles.packagePrice}>₪50</Text>
-          <Text style={styles.bonusText}>(בונוס פי 2 לקנייה ראשונה!)</Text>
-        </TouchableOpacity>
-
-        {/* חבילה 3 */}
-        <TouchableOpacity
-          style={styles.packageCard}
+        />
+        <PackageCard
+          title="100 מטבעות"
+          price="₪100"
           onPress={() => buyPackage(100)}
           disabled={loading}
-        >
-          <Text style={styles.packageTitle}>100 מטבעות</Text>
-          <Text style={styles.packagePrice}>₪100</Text>
-        </TouchableOpacity>
+        />
       </View>
 
       {loading && (
@@ -205,10 +221,25 @@ const ShopScreen = ({ userId, onLogout }) => {
   );
 };
 
-ShopScreen.propTypes = {
-  userId: PropTypes.string.isRequired,
-  onLogout: PropTypes.func.isRequired,
-};
+// קומפוננטה פנימית לעיצוב חבילה
+const PackageCard = ({ title, price, onPress, disabled, popular }) => (
+  <TouchableOpacity
+    style={[styles.packageCard, popular && styles.popular]}
+    onPress={onPress}
+    disabled={disabled}
+  >
+    {popular && (
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>הכי פופולרי!</Text>
+      </View>
+    )}
+    <Text style={styles.packageTitle}>{title}</Text>
+    <Text style={styles.packagePrice}>{price}</Text>
+    {popular && (
+      <Text style={styles.bonusText}>(בונוס פי 2 לקנייה ראשונה!)</Text>
+    )}
+  </TouchableOpacity>
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -222,15 +253,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#fff',
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 10,
   },
+  statsContainer: { marginBottom: 20 },
   balance: {
     fontSize: 24,
     color: '#ffa502',
     textAlign: 'center',
-    marginBottom: 30,
     fontWeight: 'bold',
   },
+  scoreText: { fontSize: 16, color: '#ccc', textAlign: 'center', marginTop: 5 },
   logoutBtn: {
     position: 'absolute',
     top: 50,
@@ -262,6 +294,30 @@ const styles = StyleSheet.create({
   bonusText: { fontSize: 12, color: '#2ed573', marginTop: 5 },
   loadingOverlay: { marginTop: 20, alignItems: 'center' },
   loadingText: { color: '#fff', marginTop: 10 },
+  testButton: {
+    backgroundColor: '#535c68',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#ffa502',
+    borderStyle: 'dashed',
+  },
+  testButtonText: { color: '#ffa502', textAlign: 'center', fontWeight: 'bold' },
 });
+// הוספת ולידציה לקומפוננטת העזר PackageCard
+PackageCard.propTypes = {
+  title: PropTypes.string.isRequired,
+  price: PropTypes.string.isRequired,
+  onPress: PropTypes.func.isRequired,
+  disabled: PropTypes.bool,
+  popular: PropTypes.bool,
+};
+
+// וודאי שגם ההגדרה הזו קיימת (היא כבר הייתה שם, רק תוודאי)
+ShopScreen.propTypes = {
+  userId: PropTypes.string.isRequired,
+  onLogout: PropTypes.func.isRequired,
+};
 
 export default ShopScreen;
