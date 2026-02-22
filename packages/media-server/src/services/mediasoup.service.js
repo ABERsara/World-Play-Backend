@@ -25,18 +25,23 @@ export const createRouter = (worker) => {
     mediaCodecs: config.mediasoup.router.mediaCodecs,
   });
 };
-
-// טרנספורט עבור FFmpeg (מוציא מידע מהשרת לעצמו)
+/**
+ * טרנספורט עבור FFmpeg (Stream B) (שחקנים אחרים) -
+ * מוציא מידע מהשרת לעצמו בתוך הרשת הפנימית
+ */
 export const createPlainTransportForFFmpeg = async (router) => {
   const transport = await router.createPlainTransport({
-    listenIp: { ip: '127.0.0.1' }, // FFmpeg רץ מקומית
+    listenIp: {
+      ip: '0.0.0.0',
+      announcedIp: process.env.ANNOUNCED_IP || '127.0.0.1',
+    },
     rtcpMux: false,
-    comedia: false, // אנחנו נגיד לו לאיזה פורט לשלוח
+    comedia: false,
   });
   return transport;
 };
 
-// טרנספורט עבור הקליינטים (שחקנים/מנחה)
+// טרנספורט עבור הקליינטים (מנחה - Stream A)
 export const createWebRtcTransport = (router) => {
   return router.createWebRtcTransport(config.mediasoup.webRtcTransport);
 };
