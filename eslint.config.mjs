@@ -2,36 +2,40 @@ import js from '@eslint/js';
 import globals from 'globals';
 import prettierConfig from 'eslint-config-prettier';
 import prettierPlugin from 'eslint-plugin-prettier';
+import reactPlugin from 'eslint-plugin-react'; // הוסיפי את זה
 
 export default [
   {
-    ignores: [
-      '**/node_modules/**',
-      '**/prisma/**',
-      '**/dist/**',
-      '**/build/**',
-      '*.json',
-      '*.md',
-      'eslint.config.mjs',
-    ],
+    ignores: ['**/node_modules/**', '**/dist/**', 'eslint.config.mjs'],
   },
   {
     files: ['**/*.{js,mjs,cjs}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true, // זה השורה הקריטית שתפתור את השגיאה
+        },
+      },
       globals: {
         ...globals.node,
-        ...globals.browser, // חשוב עבור צד הלקוח (React)
+        ...globals.browser,
       },
     },
     plugins: {
       prettier: prettierPlugin,
+      react: reactPlugin, // הוסיפי את הפלאגין
     },
     rules: {
       ...js.configs.recommended.rules,
-      'prettier/prettier': 'error', // הופך שגיאות פריטייר לשגיאות לינטר
+      ...reactPlugin.configs.recommended.rules, // הוסיפי חוקי בסיס לריאקט
+      'prettier/prettier': 'error',
+      'react/react-in-jsx-scope': 'off', // בגרסאות חדשות לא חייבים import React בכל קובץ
+    },
+    settings: {
+      react: { version: 'detect' },
     },
   },
-  prettierConfig, // מבטל חוקי ESLINT שמתנגשים עם Prettier
+  prettierConfig,
 ];

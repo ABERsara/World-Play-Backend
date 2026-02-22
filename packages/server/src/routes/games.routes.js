@@ -6,11 +6,10 @@ const router = express.Router();
 
 router.use(authenticateToken);
 
-// יצירת משחק (דורש streamId ב-Body)
 // POST /api/games
 router.post('/', gameController.createGame);
 
-// עדכון סטטוס (למשל לסיום המשחק)
+// עדכון סטטוס (ACTIVE, PAUSED, FINISHED)
 // PUT /api/games/{GAME_ID}/status
 router.put('/:id/status', gameController.updateStatus);
 

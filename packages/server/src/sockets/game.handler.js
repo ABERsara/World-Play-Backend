@@ -1,37 +1,38 @@
 import { PrismaClient } from '@prisma/client';
-import { JoinGameSchema } from '@worldplay/shared'; 
+import { JoinGameSchema } from '@worldplay/shared';
 import { logger } from '../utils/logger.js';
 import * as gameRules from '../services/validation.service.js';
 
 const prisma = new PrismaClient();
 
 export const registerGameHandlers = (io, socket) => {
-  const user = socket.user; 
+  const user = socket.user;
 
   // --- אירוע: הצטרפות לחדר ---
-  socket.on('join_room', async (payload) => { // מקבלים את כל האובייקט (payload)
-    
+  socket.on('join_room', async (payload) => {
     // שלב 1: ולידציה מבנית (Zod) - השומר בכניסה
     // אנחנו בודקים את המידע שהגיע מהלקוח מול הסכמה המשותפת
     const validationResult = JoinGameSchema.safeParse(payload);
 
     if (!validationResult.success) {
-      // התיקון: הוספת סימן שאלה (?) אחרי user ושימוש בערך ברירת מחדל
       const username = user?.username || 'Unknown/Guest';
-      
-console.warn(`Validation failed for user ${username}`, JSON.stringify(validationResult.error.format(), null, 2));      
-      socket.emit('error', { 
-        msg: 'Invalid data format', 
-        details: validationResult.error.format() 
+
+      console.warn(
+        `Validation failed for user ${username}`,
+        JSON.stringify(validationResult.error.format(), null, 2)
+      );
+      socket.emit('error', {
+        msg: 'Invalid data format',
+        details: validationResult.error.format(),
       });
-      return; 
+      return;
     }
 
     // מעכשיו משתמשים בנתונים הנקיים שעברו ולידציה
-    const { gameId, role } = validationResult.data; 
+    const { gameId, role } = validationResult.data;
 
-    // שלב 2: ולידציה עסקית (DB) - הלוגיקה הקיימת שלך
-    
+    // שלב 2: ולידציה עסקית (DB)
+
     if (socket.rooms.has(gameId)) {
       logger.info(`User ${user.username} is already in socket room ${gameId}`);
       socket.emit('system_message', {
@@ -41,13 +42,10 @@ console.warn(`Validation failed for user ${username}`, JSON.stringify(validation
     }
 
     try {
-      // המשך הלוגיקה המקורית שלך נשאר זהה לחלוטין!
-      // ההבדל היחיד הוא שאנחנו בטוחים ש-gameId הוא באמת מחרוזת תקינה
-      
       const validation = await gameRules.validateJoinEligibility(
         gameId,
         user.id,
-        role || 'VIEWER' // ברירת מחדל אם לא הוגדר בסכמה
+        role || 'VIEWER'
       );
 
       if (validation.status === 'ALREADY_JOINED') {
@@ -87,6 +85,38 @@ console.warn(`Validation failed for user ${username}`, JSON.stringify(validation
     } catch (error) {
       logger.error(`Join Room Failed for ${user.username}`, error.message);
       socket.emit('error', { msg: error.message });
+    }
+  });
+
+  socket.on('place_bet', async (payload) => {
+    try {
+      const { gameId, questionId, optionId, amount } = payload;
+      const userId = socket.user.id;
+
+      console.log(` Bet Received via Socket: User ${userId} on Game ${gameId}`);
+
+      // עדכון ה-DB בטרנזקציה
+      await prisma.$transaction([
+        prisma.userAnswer.create({
+          data: {
+            userId,
+            questionId,
+            selectedOptionId: optionId,
+            wager: amount,
+          },
+        }),
+        prisma.user.update({
+          where: { id: userId },
+          data: { walletBalance: { decrement: amount } },
+        }),
+      ]);
+
+      // שליפת הפונקציה ושידור העדכון לכולם
+      const { syncUserBalances } = await import('../utils/balanceSync.js');
+      await syncUserBalances(io, userId, gameId);
+    } catch (error) {
+      console.error('❌ Socket Bet Error:', error.message);
+      socket.emit('error', { msg: 'ההימור נכשל' });
     }
   });
 };

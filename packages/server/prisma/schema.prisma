@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "windows"]
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -21,13 +21,20 @@ model User {
   firebaseId       String?
   googleId         String?           @unique
   facebookId       String?           @unique
+  
+  // שדות ארנק
+  walletBalance Decimal  @default(1000.00) @db.Decimal(10, 2)
+  isFirstPurchase  Boolean           @default(true)
+  stripeCustomerId String?           @unique @map("stripe_customer_id")
+
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
+  
   receivedMessages ChatMessage[]     @relation("Receiver")
   sentMessages     ChatMessage[]     @relation("Sender")
   creditCards      CreditCard[]
-  following        Follow[]          @relation("following")
-  followedBy       Follow[]          @relation("followedBy")
+  following        Follow[]          @relation("Following")
+  followedBy       Follow[]          @relation("FollowedBy")
   participations   GameParticipant[]
   hostedGames      Game[]            @relation("HostGames")
   moderatedGames   Game[]            @relation("ModeratorGames")
@@ -37,9 +44,63 @@ model User {
   userAnswers      UserAnswer[]
   points           UserPoint[]
   hostLogs         ViewLog[]         @relation("HostLogs")
-  viewLogs         ViewLog[]
+  viewLogs         ViewLog[]         @relation("UserLogs")
 
   @@map("users")
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  content    String
+  senderId   String   @map("sender_id")
+  receiverId String   @map("receiver_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  sender     User     @relation("Sender", fields: [senderId], references: [id])
+  receiver   User     @relation("Receiver", fields: [receiverId], references: [id])
+
+  @@map("chat_messages")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower    User     @relation("Following", fields: [followerId], references: [id])
+  following   User     @relation("FollowedBy", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model ViewLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  hostId    String   @map("host_id")
+  gameId    String?  @map("game_id")
+  duration  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation("UserLogs", fields: [userId], references: [id])
+  host      User     @relation("HostLogs", fields: [hostId], references: [id])
+  game      Game?    @relation(fields: [gameId], references: [id])
+
+  @@map("view_logs")
 }
 
 model CreditCard {
@@ -58,17 +119,16 @@ model CreditCard {
 }
 
 model Stream {
-  id           String       @id @default(uuid())
-  title        String
-  hostId       String       @map("host_id")
-  startTime    DateTime?    @map("start_time")
-  endTime      DateTime?    @map("end_time")
-  // שדות חדשים עבור ה-Time Shifting:
-  accumulatedPauseMs Int    @default(0) // סך כל זמן העצירות המצטבר במילישניות
-  status       StreamStatus @default(WAITING)
-  lastPausedAt DateTime?    @map("last_paused_at")
-  games        Game[]
-  host         User         @relation("HostStreams", fields: [hostId], references: [id])
+    id                 String       @id @default(uuid())
+  title              String
+  hostId             String       @map("host_id")
+  startTime          DateTime?    @map("start_time")
+  endTime            DateTime?    @map("end_time")
+  accumulatedPauseMs Int          @default(0)
+  status             StreamStatus @default(WAITING)
+  lastPausedAt       DateTime?    @map("last_paused_at")
+  games              Game[]
+  host               User         @relation("HostStreams", fields: [hostId], references: [id])
 
   @@map("streams")
 }
@@ -97,14 +157,15 @@ model Game {
 }
 
 model GameParticipant {
-  id       String   @id @default(uuid())
-  gameId   String   @map("game_id")
-  userId   String   @map("user_id")
-  role     UserRole
-  score    Int      @default(0)
-  joinedAt DateTime @default(now()) @map("joined_at")
-  game     Game     @relation(fields: [gameId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
+  id           String   @id @default(uuid())
+  gameId       String   @map("game_id")
+  userId       String   @map("user_id")
+  role         UserRole
+  score   Decimal @default(0.00) @db.Decimal(10, 2)  
+  
+  joinedAt     DateTime @default(now()) @map("joined_at")
+  game         Game     @relation(fields: [gameId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
 
   @@unique([gameId, userId])
   @@map("game_participants")
@@ -155,7 +216,7 @@ model UserPoint {
   id            String       @id @default(uuid())
   userId        String       @map("user_id")
   pointType     PointType    @map("point_type")
-  amount        Int
+amount        Decimal      @db.Decimal(10, 2)
   receivedAt    DateTime     @default(now()) @map("received_at")
   transactionId String?      @map("transaction_id")
   gameId        String?      @map("game_id")
@@ -171,7 +232,10 @@ model Transaction {
   userId        String            @map("user_id")
   type          TransactionType
   status        TransactionStatus @default(PENDING)
-  amount        Int
+  currency      CurrencyType      @default(COIN)
+amount        Decimal           @db.Decimal(10, 2)
+  gameId        String?           @map("game_id")
+  metadata      Json?
   description   String?
   failureReason String?           @map("failure_reason")
   paymentMethod String?           @map("payment_method")
@@ -183,61 +247,9 @@ model Transaction {
   @@map("transactions")
 }
 
-model ChatMessage {
-  id          String        @id @default(uuid())
-  senderId    String        @map("sender_id")
-  receiverId  String        @map("receiver_id")
-  messageText String        @map("message_text")
-  messageType MessageType   @map("message_type")
-  status      MessageStatus @default(SENT)
-  createdAt   DateTime      @default(now()) @map("created_at")
-  receiver    User          @relation("Receiver", fields: [receiverId], references: [id])
-  sender      User          @relation("Sender", fields: [senderId], references: [id])
-
-  @@map("chat_messages")
-}
-
-model Notification {
-  id       String           @id @default(uuid())
-  userId   String           @map("user_id")
-  type     NotificationType
-  content  String
-  isRead   Boolean          @default(false) @map("is_read")
-  sendDate DateTime         @default(now()) @map("send_date")
-  readDate DateTime?        @map("read_date")
-  user     User             @relation(fields: [userId], references: [id])
-
-  @@map("notifications")
-}
-
-model ViewLog {
-  id                   String    @id @default(uuid())
-  userId               String    @map("user_id")
-  gameId               String    @map("game_id")
-  duration             Int
-  answersCount         Int       @map("answers_count")
-  participationPercent Float     @map("participation_percent")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  hostId               String    @map("host_id")
-  startedAt            DateTime? @map("started_at")
-  game                 Game      @relation(fields: [gameId], references: [id])
-  host                 User      @relation("HostLogs", fields: [hostId], references: [id])
-  user                 User      @relation(fields: [userId], references: [id])
-
-  @@index([userId, hostId, duration])
-  @@map("view_logs")
-}
-
-model Follow {
-  id          String   @id @default(uuid())
-  followerId  String   @map("follower_id")
-  followingId String   @map("following_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  follower    User     @relation("following", fields: [followerId], references: [id])
-  following   User     @relation("followedBy", fields: [followingId], references: [id])
-
-  @@unique([followerId, followingId])
-  @@map("follows")
+enum CurrencyType {
+  COIN
+  DIAMOND
 }
 
 enum UserRole {
@@ -275,30 +287,13 @@ enum TransactionType {
   TRANSFER
   GIFT
   REFUND
+  WINNER_PAYOUT
 }
 
 enum TransactionStatus {
   PENDING
   SUCCESS
   FAILED
-}
-
-enum MessageType {
-  TEXT
-  SYSTEM
-  REACTION
-}
-
-enum MessageStatus {
-  SENT
-  DELIVERED
-  READ
-}
-
-enum NotificationType {
-  SYSTEM
-  GAME_INVITE
-  REWARD
 }
 
 enum QuestionRewardType {

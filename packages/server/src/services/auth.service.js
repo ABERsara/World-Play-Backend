@@ -73,4 +73,33 @@ export const authService = {
       console.error('❌ [AUTH] Error during logout:', error);
     }
   },
+
+  /**
+   * רישום משתמש חדש (אופציונלי - אם יש לך דף רישום)
+   */
+  register: async (name, username, email, password) => {
+    try {
+      console.log('📝 [AUTH] Register attempt for:', email);
+
+      const response = await fetch(`${API_URL}/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, username, email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Registration failed');
+      }
+
+      console.log('✅ [AUTH] Registration successful');
+      return data;
+    } catch (error) {
+      console.error('❌ [AUTH] Registration error:', error);
+      throw error;
+    }
+  },
 };
