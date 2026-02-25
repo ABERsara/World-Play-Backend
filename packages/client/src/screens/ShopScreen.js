@@ -48,7 +48,6 @@ const ShopScreen = ({ userId, onLogout }) => {
       const data = await response.json();
       console.log('📥 Data fetched from server:', data);
 
-      // עדכון ה-Redux Store - זה מה שגורם ל-UI להתעדכן בכל האפליקציה
       dispatch(
         updateBalances({
           walletCoins: data.walletCoins || data.walletBalance,
@@ -74,12 +73,9 @@ const ShopScreen = ({ userId, onLogout }) => {
   // לוגיקת רכישה (Stripe)
   // ========================================
   const buyPackage = async (amount) => {
-    console.log('Using Key:', process.env);
     setLoading(true);
     try {
       const token = await authService.getToken();
-      console.log('💳 Initiating purchase:', { userId, coins: amount });
-
       const response = await fetch(
         'http://10.0.2.2:8080/api/payments/create-sheet',
         {
@@ -111,10 +107,7 @@ const ShopScreen = ({ userId, onLogout }) => {
       if (paymentError) {
         console.log('❌ Payment cancelled:', paymentError.message);
       } else {
-        console.log('✅ Payment successful');
         Alert.alert('בהצלחה!', 'התשלום בוצע. היתרה תתעדכן תוך שניות...');
-
-        // שליפה יזומה לגיבוי לאחר תשלום
         setTimeout(fetchAndSyncBalance, 3000);
       }
     } catch (error) {
@@ -140,8 +133,8 @@ const ShopScreen = ({ userId, onLogout }) => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            questionId: '28a886da-89d0-4bfa-b020-ff7e66c3aac7',
-            selectedOptionId: 'f3e5d96c-1be2-4bdd-9de1-cbdf6e44a663',
+            questionId: 'c5d5074e-395b-404a-8c7d-0eef8c24f694',
+            selectedOptionId: '1910647f-5d69-4187-a376-5ba35c1da772',
             wager: 10,
           }),
         }
@@ -150,8 +143,9 @@ const ShopScreen = ({ userId, onLogout }) => {
       const data = await response.json();
       console.log('✅ Server processed answer:', data);
 
-      // אם השרת החזיר תשובה תקינה, נרענן את היתרה בסטור
       if (data.answer) {
+        // היתרה תתעדכן אוטומטית דרך ה-Socket Middleware,
+        // הקריאה ל-fetchAndSyncBalance היא רק לגיבוי
         fetchAndSyncBalance();
       }
     } catch (err) {
@@ -177,9 +171,12 @@ const ShopScreen = ({ userId, onLogout }) => {
       <Text style={styles.title}>🪙 חנות מטבעות</Text>
 
       <View style={styles.statsContainer}>
-        <Text style={styles.balance}>יתרה: {coins} מטבעות</Text>
+        {/* תיקון: הצגת היתרה עם דיוק של 2 ספרות אחרי הנקודה */}
+        <Text style={styles.balance}>
+          יתרה: {Number(coins || 0).toFixed(2)} מטבעות
+        </Text>
         <Text style={styles.scoreText}>
-          ניקוד פעיל: {Object.values(scores)[0] || 0} נקודות
+          ניקוד פעיל: {Number(Object.values(scores)[0] || 0).toFixed(2)} נקודות
         </Text>
       </View>
 
@@ -221,7 +218,6 @@ const ShopScreen = ({ userId, onLogout }) => {
   );
 };
 
-// קומפוננטה פנימית לעיצוב חבילה
 const PackageCard = ({ title, price, onPress, disabled, popular }) => (
   <TouchableOpacity
     style={[styles.packageCard, popular && styles.popular]}
@@ -305,7 +301,7 @@ const styles = StyleSheet.create({
   },
   testButtonText: { color: '#ffa502', textAlign: 'center', fontWeight: 'bold' },
 });
-// הוספת ולידציה לקומפוננטת העזר PackageCard
+
 PackageCard.propTypes = {
   title: PropTypes.string.isRequired,
   price: PropTypes.string.isRequired,
@@ -314,7 +310,6 @@ PackageCard.propTypes = {
   popular: PropTypes.bool,
 };
 
-// וודאי שגם ההגדרה הזו קיימת (היא כבר הייתה שם, רק תוודאי)
 ShopScreen.propTypes = {
   userId: PropTypes.string.isRequired,
   onLogout: PropTypes.func.isRequired,
