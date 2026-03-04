@@ -21,7 +21,7 @@ import { CreateGameSchema } from '@world-play/shared';
 
 You can publish this package to an internal registry or continue consuming it via yarn/npm workspaces in the monorepo.
 
-## 🛠 Development
+## Development
 
 No build step is required (plain JavaScript). Just modify the source and update dependent packages by reinstalling or running `yarn workspace <pkg> add @world-play/shared@*`.
 

@@ -8,7 +8,6 @@ const prisma = new PrismaClient();
 export const streams = {};
 const transports = {};
 const producers = {};
-const consumers = {};
 
 export const registerStreamHandlers = (io, socket) => {
   const user = socket.user;
@@ -47,6 +46,7 @@ export const registerStreamHandlers = (io, socket) => {
           router,
           hostSocketId: socket.id,
           hostUserId: user ? user.id : 'dev-host',
+          transports: new Map(), // הוספנו מפה לניהול טרנספורטים בתוך החדר
         };
       }
       callback({ rtpCapabilities: streams[streamId].router.rtpCapabilities });
@@ -66,9 +66,12 @@ export const registerStreamHandlers = (io, socket) => {
         if (dtlsState === 'closed') {
           transport.close();
           delete transports[transport.id];
+          streamRoom.transports.delete(transport.id);
         }
       });
       transports[transport.id] = transport;
+      streamRoom.transports.set(transport.id, transport); // שמירה בחדר עבור ה-Consume
+
       callback({
         id: transport.id,
         iceParameters: transport.iceParameters,
@@ -96,39 +99,56 @@ export const registerStreamHandlers = (io, socket) => {
 
   socket.on('stream:produce', async (data, callback) => {
     try {
-      // שיפור החילוץ: אם data הוא מערך, קח את האיבר הראשון. אם לא, קח את data עצמו.
-      const actualData = Array.isArray(data) ? data[0] : data;
+      let actualData = data;
 
-      console.log('DEBUG RAW DATA:', JSON.stringify(actualData)); // לוג שיעזור לנו לראות מה הגיע
+      if (Array.isArray(data)) actualData = data[0];
 
+      if (typeof actualData === 'string') {
+        try {
+          actualData = JSON.parse(actualData.trim());
+        } catch (parseError) {
+          console.error(
+            ' JSON Parse failed:',
+            parseError.message,
+            'String received:',
+            actualData
+          );
+        }
+      }
+
+      console.log('DEBUG FINAL OBJECT:', actualData);
+
+      // שינוי ל-let כי אנחנו עשויים לעדכן את rtpParameters
       let { transportId, kind, rtpParameters, streamId } = actualData || {};
 
       if (!kind) {
-        console.error('❌ Kind is missing! Received:', actualData);
-        return callback({ error: 'kind is required (video/audio)' });
+        console.error(' Kind is missing! Type of data:', typeof actualData);
+        if (typeof callback === 'function')
+          callback({ error: 'kind is required' });
+        return;
       }
 
       const streamRoom = streams[streamId];
       if (!streamRoom)
         throw new Error('Room not found. Call stream:create_room first.');
 
-      // 1. טיפול בטרנספורט (הגרסה הסלחנית)
       let transport = transports[transportId];
       if (!transport) {
-        console.log(`⚠️ Creating temporary transport for testing...`);
+        console.log(`Creating temporary transport for testing...`);
         transport = await msService.createWebRtcTransport(streamRoom.router);
         transports[transport.id] = transport;
+        streamRoom.transports.set(transport.id, transport);
+        console.log(`Temporary transport created with ID: ${transport.id}`);
       }
 
-      // 2. הוספת Codecs אם הם חסרים (כדי למנוע את השגיאה params.codecs)
-      // 2. הוספת Codecs ו-Encodings אם הם חסרים (כדי למנוע שגיאות rtpMapping)
+      // 2. הוספת Codecs ו-Encodings אם הם חסרים
       if (
         !rtpParameters ||
         !rtpParameters.codecs ||
         rtpParameters.codecs.length === 0
       ) {
         rtpParameters = {
-          mid: 'v', // הוספנו Media ID
+          mid: 'v',
           codecs: [
             {
               mimeType: 'video/vp8',
@@ -137,13 +157,12 @@ export const registerStreamHandlers = (io, socket) => {
               parameters: { 'x-google-start-bitrate': 1000 },
             },
           ],
-          encodings: [{ ssrc: 11111111 }], // זה ה-SSRC שהיה חסר לו!
+          encodings: [{ ssrc: 11111111 }],
         };
       } else if (
         !rtpParameters.encodings ||
         rtpParameters.encodings.length === 0
       ) {
-        // גם אם הקליינט שלח קודקים אבל שכח encodings
         rtpParameters.encodings = [{ ssrc: 11111111 }];
       }
 
@@ -157,13 +176,11 @@ export const registerStreamHandlers = (io, socket) => {
       if (kind === 'video' && (role === 'HOST' || role === 'PLAYER')) {
         console.log(`🚀 [STREAM B] Launching FFmpeg Pipeline...`);
 
-        // עדכון DB
         await prisma.stream.update({
           where: { id: streamId },
           data: { status: 'LIVE', startTime: new Date() },
         });
 
-        // הפעלת ההקלטה
         await StreamService.startRecording(
           streamId,
           streamRoom.router,
@@ -178,37 +195,46 @@ export const registerStreamHandlers = (io, socket) => {
       if (typeof callback === 'function') callback({ error: err.message });
     }
   });
-  socket.on(
-    'stream:consume',
-    async (
-      { transportId, producerId, rtpCapabilities, streamId },
-      callback
-    ) => {
-      try {
-        const transport = transports[transportId];
-        const streamRoom = streams[streamId];
-        if (!transport || !streamRoom) return callback({ error: 'Not found' });
-        if (!streamRoom.router.canConsume({ producerId, rtpCapabilities })) {
-          return callback({ error: 'Cannot consume' });
-        }
-        const consumer = await transport.consume({
-          producerId,
-          rtpCapabilities,
-          paused: true,
-        });
-        consumers[consumer.id] = consumer;
-        callback({
-          id: consumer.id,
-          producerId,
-          kind: consumer.kind,
-          rtpParameters: consumer.rtpParameters,
-        });
-        await consumer.resume();
-      } catch (error) {
-        callback({ error: error.message });
+
+  socket.on('stream:consume', async (data, callback) => {
+    try {
+      const actualData =
+        typeof data === 'string' ? JSON.parse(data.trim()) : data;
+      const { streamId, transportId, producerId, rtpCapabilities } = actualData;
+
+      console.log(`📡 [CONSUME] Request for producer: ${producerId}`);
+
+      const room = streams[streamId];
+      if (!room) return callback({ error: 'Room not found' });
+
+      const transport = room.transports.get(transportId);
+      if (!transport) return callback({ error: 'Transport not found' });
+
+      if (!room.router.canConsume({ producerId, rtpCapabilities })) {
+        return callback({ error: 'Cannot consume' });
       }
+
+      const consumer = await transport.consume({
+        producerId,
+        rtpCapabilities,
+        paused: false,
+      });
+
+      consumer.on('transportclose', () => {
+        console.log('Consumer transport closed');
+      });
+
+      callback({
+        id: consumer.id,
+        producerId,
+        kind: consumer.kind,
+        rtpParameters: consumer.rtpParameters,
+      });
+    } catch (consumeError) {
+      console.error('❌ Consume error:', consumeError);
+      callback({ error: consumeError.message });
     }
-  );
+  });
 
   socket.on('stream:join', async ({ streamId }, callback) => {
     try {
@@ -248,37 +274,10 @@ export const handleCloseStream = async (streamId, io) => {
   io.to(streamId).emit('stream:ended', { streamId });
   delete streams[streamId];
 };
+
 async function validateParticipantRole(streamId, userId) {
   const participant = await prisma.gameParticipant.findFirst({
     where: { game: { streamId }, userId },
   });
   return participant?.role || 'VIEWER';
 }
-
-// async function setupStreamB(streamId, rtpParameters, role) {
-//   console.log(`[STREAM B] 🎥 Initializing FFmpeg for ${role}...`);
-// const streamRoom = streams[streamId];
-//  if (!streamRoom || !streamRoom.router) {
-//     throw new Error(`Room or Router not found for stream ${streamId}. Did you call stream:create_room?`);
-//   }
-// // אנחנו צריכים את ה-producer של הוידאו כדי להקליט אותו
-// const producer = Object.values(producers).find(p => p.kind === 'video');
-
-// if (!producer) throw new Error("No video producer found to record");
-
-// await StreamService.startRecording(streamId, streamRoom.router, producer);
-
-//   // עדכון סטטוס ל-LIVE עם זמן התחלה
-//   await prisma.stream.update({
-//     where: { id: streamId },
-//     data: { status: 'LIVE', startTime: new Date() }
-//   });
-
-//   //  מעבירים ל-Service את ה-router מהחדר
-//   await StreamService.startRecording(streamId, streamRoom.router, {
-//     kind: 'video',
-//     rtpParameters
-//   });
-
-//   console.log("✅ STREAM B READY");
-// }

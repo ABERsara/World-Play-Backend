@@ -1,4 +1,4 @@
-# Welcome to your Expo app 👋
+# Welcome to Expo app
 
 This package lives in the `packages/client` directory of the **World‑Play MonoRepo**. It is the React Native frontend for the project.
 
