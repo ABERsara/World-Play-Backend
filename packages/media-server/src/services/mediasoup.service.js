@@ -36,7 +36,7 @@ export const createPlainTransportForFFmpeg = async (router) => {
       announcedIp: process.env.ANNOUNCED_IP || '127.0.0.1',
     },
     rtcpMux: false,
-    comedia: false,
+    comedia: true,
   });
   return transport;
 };

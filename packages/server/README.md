@@ -1,5 +1,7 @@
 # World-Play-Backend
 
+This package lives in the `packages/server` directory of the **World‑Play MonoRepo** and implements the primary API & game logic for the platform.
+
 Node.js backend for an interactive live-streaming trivia platform featuring real-time game logic via Socket.io and WebRTC.
 
 # Docker

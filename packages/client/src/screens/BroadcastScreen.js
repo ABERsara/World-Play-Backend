@@ -20,9 +20,9 @@ export default function BroadcastScreen() {
   const stopStream = async () => {
     try {
       if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       }
-      
+
       // משתמשים ב-ID שקיבלנו מהשרת בזמן היצירה
       if (currentStreamId) {
         socket.emit('stream:stop_broadcast', { streamId: currentStreamId });
@@ -40,38 +40,51 @@ export default function BroadcastScreen() {
 
   const startStream = async () => {
     try {
-      setStatus('מבקש מהשרת אישור לשידור...');
-      
-      // שלב 1: השרת יוצר את הסטרים ב-DB ומחזיר לנו ID אמיתי
-      const response = await emitPromise('stream:init_broadcast', {});
-      const streamIdFromServer = response.streamId; 
+      setStatus('מאתחל משחק...');
+
+      // 1. עדכון שרת האפליקציה שהמשחק מתחיל (ACTIVE)
+      // זה יעדכן את ה-DB שהסטטוס הוא ACTIVE
+      const gameData = await emitPromise('stream:init_broadcast', {
+        title: 'משחק חדש',
+      });
+      const streamIdFromServer = gameData.streamId;
       setCurrentStreamId(streamIdFromServer);
 
-      setStatus('מבקש גישה למצלמה...');
-      const media = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } }, 
-        audio: true 
+      // 2. גישה למצלמה
+      const media = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
       });
       setStream(media);
 
-      setStatus('מקים חדר בשרת המדיה...');
-      // שלב 2: משתמשים ב-ID שהשרת יצר עבורנו
-      const roomData = await emitPromise('stream:create_room', { streamId: streamIdFromServer });
-      
+      // 3. התחברות לשרת המדיה (Socket המדיה)
+      const roomData = await emitPromise('stream:create_room', {
+        streamId: streamIdFromServer,
+      });
       await MediasoupManager.initDevice(roomData.rtpCapabilities);
-      
-      setStatus('מקים טרנספורט...');
-      const transport = await MediasoupManager.createTransport(socket, 'send', streamIdFromServer);
-      
-      setStatus('מתחיל הזרמה...');
-      await transport.produce({ track: media.getVideoTracks()[0] });
-      await transport.produce({ track: media.getAudioTracks()[0] });
+
+      // 4. יצירת טרנספורט שליחה
+      const transport = await MediasoupManager.createTransport(
+        socket,
+        'send',
+        streamIdFromServer
+      );
+
+      // 5. שליחת הוידאו - כאן קורה הקסם!
+      // ברגע שזה נשלח, ה-Media Server יזהה שאתה HOST/PLAYER ויפעיל FFmpeg
+      await transport.produce({
+        track: media.getVideoTracks()[0],
+        appData: { role: 'HOST' },
+      });
+      await transport.produce({
+        track: media.getAudioTracks()[0],
+        appData: { role: 'HOST' },
+      });
 
       setIsLive(true);
-      setStatus('LIVE 🔴');
-      console.log('✅ שידור חי פעיל עם ID:', streamIdFromServer);
+      setStatus('LIVE 🔴 - הצופים רואים אותך בפיד');
     } catch (err) {
-      console.error('❌ שגיאה בשידור:', err);
+      console.error('Stream Error:', err);
       setStatus('שגיאה: ' + err.message);
     }
   };
@@ -85,16 +98,16 @@ export default function BroadcastScreen() {
 
       <View style={styles.videoContainer}>
         {stream ? (
-          <video 
+          <video
             ref={videoRef}
-            autoPlay 
-            playsInline 
-            muted 
-            style={styles.webVideo} 
+            autoPlay
+            playsInline
+            muted
+            style={styles.webVideo}
           />
         ) : (
           <View style={styles.placeholder}>
-            <Text style={{color: '#666'}}>המצלמה כבויה - לחצי על התחל</Text>
+            <Text style={{ color: '#666' }}>המצלמה כבויה - לחצי על התחל</Text>
           </View>
         )}
       </View>
@@ -115,8 +128,21 @@ const styles = StyleSheet.create({
   header: { padding: 20, alignItems: 'center' },
   title: { fontSize: 22, color: '#fff', fontWeight: 'bold' },
   statusText: { color: '#ffa502', marginTop: 5 },
-  videoContainer: { flex: 1, backgroundColor: '#000', margin: 10, borderRadius: 10, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  webVideo: { width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' },
+  videoContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    margin: 10,
+    borderRadius: 10,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webVideo: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    transform: 'scaleX(-1)',
+  },
   placeholder: { alignItems: 'center' },
-  footer: { padding: 20 }
+  footer: { padding: 20 },
 });

@@ -10,7 +10,6 @@ import { socketAuth } from './src/middleware/socketAuth.js';
 import { createWorkers } from './src/services/mediasoup.service.js';
 import { registerStreamHandlers } from './src/sockets/stream.handler.js';
 import statusRoutes from './src/routes/status.routes.js';
-import streamRoutes from './src/routes/stream.routes.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,10 +24,11 @@ const io = new Server(httpServer, {
 app.use(express.json());
 
 // הגשת קבצי ה-HLS לצפייה
-app.use('/hls', express.static(path.join(__dirname, 'media_files')));
+// עדכון נתיב הגשת הקבצים (HLS ופוסטרים)
+// שינינו מ-'media_files' ל-'public/streams' כדי להתאים ל-FFmpegService
+app.use('/streams', express.static(path.join(__dirname, 'public', 'streams')));
 
 app.use('/', statusRoutes);
-app.use('/live', streamRoutes);
 
 io.use(socketAuth);
 io.on('connection', (socket) => {
