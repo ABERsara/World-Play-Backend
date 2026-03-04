@@ -1,3 +1,5 @@
+// packages/media-server/src/services/mediasoup.service.js
+
 import mediasoup from 'mediasoup';
 import { config } from '../config.js';
 
@@ -7,9 +9,7 @@ let nextWorkerIdx = 0;
 export const createWorkers = async () => {
   for (let i = 0; i < config.mediasoup.numWorkers; i++) {
     const worker = await mediasoup.createWorker(config.mediasoup.worker);
-    worker.on('died', () => {
-      setTimeout(() => process.exit(1), 2000);
-    });
+    worker.on('died', () => setTimeout(() => process.exit(1), 2000));
     workers.push(worker);
   }
 };
@@ -25,18 +25,23 @@ export const createRouter = (worker) => {
     mediaCodecs: config.mediasoup.router.mediaCodecs,
   });
 };
-
-export const createWebRtcTransport = (router) => {
-  return router.createWebRtcTransport(config.mediasoup.webRtcTransport);
+/**
+ * טרנספורט עבור FFmpeg (Stream B) (שחקנים אחרים) -
+ * מוציא מידע מהשרת לעצמו בתוך הרשת הפנימית
+ */
+export const createPlainTransportForFFmpeg = async (router) => {
+  const transport = await router.createPlainTransport({
+    listenIp: {
+      ip: '0.0.0.0',
+      announcedIp: process.env.ANNOUNCED_IP || '127.0.0.1',
+    },
+    rtcpMux: false,
+    comedia: true,
+  });
+  return transport;
 };
 
-export const createPlainTransport = async (router) => {
-  const transport = await router.createPlainTransport({
-    // מאזינים ל-Localhost כי ה-FFmpeg רץ על אותו שרת (או בתוך אותו קומפוז)
-    listenIp: { ip: '127.0.0.1', announcedIp: null },
-    rtcpMux: false, // הגדרה סטנדרטית לעבודה עם FFmpeg
-    comedia: true, // מאפשר לטרנספורט לזהות אוטומטית מאיפה FFmpeg משדר
-  });
-
-  return transport;
+// טרנספורט עבור הקליינטים (מנחה - Stream A)
+export const createWebRtcTransport = (router) => {
+  return router.createWebRtcTransport(config.mediasoup.webRtcTransport);
 };

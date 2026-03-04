@@ -1,94 +1,93 @@
+// packages/server/src/services/stream.service.js
+
 import { PrismaClient } from '@prisma/client';
-import { spawn } from 'child_process';
-import * as gameRules from '../services/validation.service.js';
+import axios from 'axios';
+import { PassThrough } from 'stream';
 
 const prisma = new PrismaClient();
-const activeStreams = new Map();
+const MEDIA_SERVER_URL = 'http://media-server:8000';
 
 const streamService = {
   async startStream(streamId, inputPipe) {
-    if (activeStreams.has(streamId)) {
-      throw new Error('Stream already exists');
-    }
+    console.log(`📡 Redirecting stream ${streamId} to Media Server...`);
 
-    console.log(`📡 Ingesting stream ${streamId} and relaying to internal RTP`);
+    // *** יצירת buffer stream כדי לשמור את המידע ***
+    const bufferStream = new PassThrough();
 
-    const rtpPort = 5000 + Math.floor(Math.random() * 1000);
-    const rtpUrl = `rtp://127.0.0.1:${rtpPort}`;
+    let totalBytes = 0;
+    let chunks = [];
 
-    const ffmpeg = spawn('ffmpeg', [
-      '-i',
-      'pipe:0',
-      '-c:v',
-      'libx264',
-      '-preset',
-      'ultrafast',
-      '-tune',
-      'zerolatency',
-      '-c:a',
-      'aac',
-      '-f',
-      'rtp',
-      rtpUrl,
-    ]);
+    // אוסף את כל המידע לפני שליחה
+    inputPipe.on('data', (chunk) => {
+      totalBytes += chunk.length;
+      chunks.push(chunk);
+      bufferStream.write(chunk);
 
-    activeStreams.set(streamId, {
-      ffmpeg,
-      rtpUrl,
-      rtpPort,
-      startTime: Date.now(),
-    });
-
-    // שימי לב: notifyBackend צריכה להיות מוגדרת או מיובאת.
-    // אם היא בתוך האובייקט הזה, השתמשי ב-this.
-    await this.updateStreamStatus(streamId, null, 'LIVE');
-
-    inputPipe.pipe(ffmpeg.stdin);
-
-    ffmpeg.stderr.on('data', (data) => {
-      if (data.toString().includes('error')) {
-        console.error(`⚠️ FFmpeg [${streamId}]:`, data.toString());
+      if (
+        Math.floor(totalBytes / 1000000) >
+        Math.floor((totalBytes - chunk.length) / 1000000)
+      ) {
+        console.log(
+          `📥 App Server Progress: ${(totalBytes / 1024 / 1024).toFixed(2)} MB received`
+        );
       }
     });
 
-    ffmpeg.on('close', (code) => {
-      console.log(`🛑 Stream relay ${streamId} stopped (code: ${code})`);
-      activeStreams.delete(streamId);
-    });
-  },
+    // כשהקלט נגמר - שלח הכל ל-Media Server
+    inputPipe.on('end', async () => {
+      console.log(
+        `✅ Full video received: ${(totalBytes / 1024 / 1024).toFixed(2)} MB`
+      );
+      bufferStream.end();
 
-  async createStream(hostId, { title }) {
-    await gameRules.validateUserHasNoActiveStream(hostId);
-    return await prisma.stream.create({
-      data: {
-        title,
-        hostId,
-        status: 'WAITING',
-      },
+      // עכשיו שלח ל-Media Server
+      try {
+        const finalBuffer = Buffer.concat(chunks);
+        console.log(
+          `🚀 Sending ${finalBuffer.length} bytes to Media Server...`
+        );
+
+        const response = await axios({
+          method: 'post',
+          url: `${MEDIA_SERVER_URL}/live/start/${streamId}`,
+          data: finalBuffer,
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': finalBuffer.length,
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+          timeout: 60000, // 60 שניות timeout
+        });
+
+        console.log(`✅ Media Server response:`, response.data);
+      } catch (error) {
+        console.error(`❌ Failed to send to Media Server:`, error.message);
+        throw error;
+      }
+    });
+
+    inputPipe.on('error', (err) => {
+      console.error(`❌ Input pipe error:`, err.message);
+      bufferStream.destroy(err);
     });
   },
 
   async updateStreamStatus(streamId, userId, newStatus) {
-    const stream = await prisma.stream.findUnique({
-      where: { id: streamId },
-    });
-
+    const stream = await prisma.stream.findUnique({ where: { id: streamId } });
     if (!stream) throw new Error('Stream not found');
-
-    // אם userId הוא null, אנחנו מדלגים על בדיקת המארח (עבור עדכונים פנימיים מהשרת)
-    if (userId && stream.hostId !== userId) {
-      throw new Error('Unauthorized: Only the host can update stream status');
-    }
 
     const dataToUpdate = { status: newStatus };
     const now = new Date();
 
-    if (newStatus === 'LIVE' && !stream.startTime) {
-      dataToUpdate.startTime = now;
-    } else if (newStatus === 'FINISHED') {
-      dataToUpdate.endTime = now;
-    } else if (newStatus === 'PAUSE') {
+    if (newStatus === 'PAUSE') {
       dataToUpdate.lastPausedAt = now;
+    } else if (newStatus === 'LIVE' && stream.lastPausedAt) {
+      const pauseDuration =
+        now.getTime() - new Date(stream.lastPausedAt).getTime();
+      dataToUpdate.accumulatedPauseMs =
+        (stream.accumulatedPauseMs || 0) + pauseDuration;
+      dataToUpdate.lastPausedAt = null;
     }
 
     return await prisma.stream.update({

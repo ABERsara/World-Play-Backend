@@ -1,5 +1,7 @@
 # Welcome to your Expo app 👋
 
+This package lives in the `packages/client` directory of the **World‑Play MonoRepo**. It is the React Native frontend for the project.
+
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started
