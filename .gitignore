@@ -51,3 +51,15 @@ packages/media-server/media_files/
 
 # Husky (Un-ignore just in case someone added a generic rule elsewhere)
 !.husky/
+
+# Expo Prebuild / Native folders
+packages/client/android/
+packages/client/ios/
+
+# Local properties (Android SDK path)
+**/local.properties
+
+# Gradle
+.gradle/
+**/android/.gradle
+**/android/build

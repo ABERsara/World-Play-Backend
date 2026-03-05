@@ -1,12 +1,15 @@
-// src/services/socket.service.js
 import { io } from 'socket.io-client';
 import { authService } from './auth.service';
+import { Platform } from 'react-native';
 
-const SOCKET_URL = 'http://10.0.2.2:8080';
-export let socket = null;
+const SOCKET_URL =
+  Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+
+// משתנה פנימי שניתן לשינוי
+let socketInstance = null;
 
 export const connectSocket = async () => {
-  if (socket && socket.connected) return socket;
+  if (socketInstance && socketInstance.connected) return socketInstance;
 
   const token = await authService.getToken();
   if (!token) {
@@ -14,36 +17,32 @@ export const connectSocket = async () => {
     return null;
   }
 
-  socket = io(SOCKET_URL, {
+  socketInstance = io(SOCKET_URL, {
     auth: { token },
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
     reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionAttempts: 5,
   });
 
-  socket.on('connect', () => {
-    console.log('✅ Socket connected:', socket.id);
+  socketInstance.on('connect', () => {
+    console.log('✅ Socket connected:', socketInstance.id);
   });
 
-  socket.on('connect_error', (error) => {
+  socketInstance.on('connect_error', (error) => {
     console.error('❌ Socket connection error:', error.message);
   });
 
-  return socket;
+  return socketInstance;
 };
+
+// אקספורט של ה-instance עצמו (Getter)
+export const getSocket = () => socketInstance;
 
 export const emitPromise = (type, data) => {
   return new Promise((resolve, reject) => {
-    const getSocket = socket ? Promise.resolve(socket) : connectSocket();
-
-    getSocket
-      .then((activeSocket) => {
-        if (!activeSocket) {
-          return reject(new Error('סוקט לא מחובר - אין טוקן'));
-        }
-
-        if (!activeSocket.connected) {
+    const initialize = async () => {
+      try {
+        const activeSocket = socketInstance || (await connectSocket());
+        if (!activeSocket || !activeSocket.connected) {
           return reject(new Error('סוקט לא מחובר'));
         }
 
@@ -54,13 +53,20 @@ export const emitPromise = (type, data) => {
             resolve(response);
           }
         });
-      })
-      .catch((err) => reject(err));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    initialize();
   });
 };
+
 export const disconnectSocket = () => {
-  if (socket) {
-    socket.disconnect();
-    socket = null;
+  if (socketInstance) {
+    socketInstance.disconnect();
+    socketInstance = null;
   }
 };
+
+// תאימות לאחור לקוד קיים שמשתמש ב-import { socket }
+export { socketInstance as socket };
