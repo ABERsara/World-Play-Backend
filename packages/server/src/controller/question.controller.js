@@ -1,5 +1,5 @@
 // src/controller/question.controller.js
-// ✅ עדכון: אינטגרציה מלאה עם סנכרון real-time
+// ✅ עדכון סופי: אינטגרציה מלאה עם סנכרון ארנק וניקוד בזמן אמת
 
 import questionService from '../services/question.service.js';
 import {
@@ -11,7 +11,7 @@ import {
 const questionController = {
   /**
    * POST /api/questions
-   * הוספת שאלה חדשה למשחק
+   * הוספת שאלה חדשה למשחק ושידור לכל המשתתפים
    */
   async addQuestion(req, res) {
     try {
@@ -31,14 +31,14 @@ const questionController = {
         });
       }
 
-      // יצירת השאלה
+      // יצירת השאלה ב-DB דרך ה-Service
       const newQuestion = await questionService.createQuestion(gameId, userId, {
         questionText,
         rewardType,
         options,
       });
 
-      // שידור לכל המשתתפים במשחק
+      // שידור השאלה החדשה לכל המשתתפים בחדר המשחק
       const io = req.app.get('io');
       if (io) {
         io.to(gameId).emit('game:new_question', {
@@ -60,7 +60,6 @@ const questionController = {
     } catch (error) {
       console.error('Add Question Error:', error);
 
-      // טיפול בשגיאות ספציפיות
       if (error.message === 'Game not found') {
         return res.status(404).json({ error: 'המשחק לא נמצא' });
       }
@@ -72,17 +71,13 @@ const questionController = {
         return res.status(403).json({ error: error.message });
       }
 
-      if (error.message.includes('Action not allowed')) {
-        return res.status(400).json({ error: error.message });
-      }
-
       res.status(500).json({ error: 'שגיאה ביצירת השאלה' });
     }
   },
 
   /**
    * PATCH /api/questions/:id/resolve
-   * סגירת שאלה וחלוקת כספים
+   * סגירת שאלה, חלוקת כספים (85/15 או פרופורציונלי) וסנכרון ארנקים וניקוד
    */
   async resolveQuestion(req, res) {
     try {
@@ -90,47 +85,61 @@ const questionController = {
       const { optionId } = req.body;
       const userId = req.user.id;
 
-      // ולידציה בסיסית
       if (!optionId) {
         return res
           .status(400)
           .json({ error: 'חובה לשלוח optionId (התשובה הנכונה)' });
       }
 
-      // סגירת השאלה + חלוקת כספים
       console.log(`[CONTROLLER] Resolving question ${questionId}...`);
+
+      // ביצוע הלוגיקה הכלכלית ב-Service (כולל Prisma Transaction)
       const result = await questionService.resolveQuestion(
         questionId,
         userId,
         optionId
       );
 
-      // ✅ סנכרון Real-time
       const io = req.app.get('io');
       const gameId = result.question.gameId;
 
       if (io) {
-        // 1. עדכון יתרות למשתמשים שקיבלו כסף
-        if (result.distribution?.distributions) {
-          const affectedUsers = result.distribution.distributions.map(
-            (d) => d.userId
-          );
+        // --- לוגיקת סנכרון Real-time מורחבת (ארנק + ניקוד) ---
 
-          // הוספת משתמשים שקיבלו בונוס תשובה נכונה
-          if (result.correctAnswerRewards) {
-            const bonusUsers = result.correctAnswerRewards.map((r) => r.userId);
-            affectedUsers.push(...bonusUsers);
-          }
-
-          // הסרת כפילויות
-          const uniqueUsers = [...new Set(affectedUsers)];
-          await syncUserBalances(io, uniqueUsers);
+        // 1. אם זו שאלת "מי ינצח" - סנכרון מיידי למנצח שקיבל 85%
+        if (result.distribution?.winnerId) {
+          await syncUserBalances(io, result.distribution.winnerId, gameId);
         }
 
-        // 2. עדכון טבלת הניקוד במשחק
+        // 2. עדכון יתרות לכל שאר המשתתפים שהושפעו (בונוס 125%, חלוקת קופה רגילה וכו')
+        const affectedUsers = [];
+
+        if (result.distribution?.distributions) {
+          affectedUsers.push(
+            ...result.distribution.distributions.map((d) => d.userId)
+          );
+        }
+
+        if (result.correctAnswerRewards) {
+          affectedUsers.push(
+            ...result.correctAnswerRewards.map((r) => r.userId)
+          );
+        }
+
+        // הסרת כפילויות וסנכרון לכל משתמש בנפרד
+        const uniqueUsers = [...new Set(affectedUsers)];
+        for (const uId of uniqueUsers) {
+          // סנכרון זה מעדכן ב-UI גם את הארנק וגם את הניקוד בזירה
+          await syncUserBalances(io, uId, gameId);
+        }
+
+        // 3. עדכון המנחה (עמלת 15% או עמלת קופה רגילה)
+        await syncUserBalances(io, userId, gameId);
+
+        // 4. עדכון כללי של טבלת המובילים (Leaderboard) במשחק
         await syncGameScores(io, gameId);
 
-        // 3. שידור אירוע סגירת שאלה
+        // שידור הודעת סגירת שאלה כללית לחדר
         io.to(gameId).emit('game:question_resolved', {
           questionId,
           correctOptionId: optionId,
@@ -142,15 +151,13 @@ const questionController = {
           timestamp: new Date().toISOString(),
         });
 
-        // 4. אירוע כלכלי כללי
+        // שידור אירוע כלכלי לתיעוד בלייב
         broadcastEconomyEvent(io, gameId, 'POT_DISTRIBUTED', {
           questionId,
           totalAmount: result.distribution?.totalPot || 0,
-          rewardType: result.summary.rewardType,
         });
       }
 
-      // החזרת תוצאות
       res.status(200).json({
         message: 'השאלה נסגרה והכספים חולקו בהצלחה',
         question: result.question,
@@ -161,7 +168,6 @@ const questionController = {
     } catch (error) {
       console.error('Resolve Question Error:', error);
 
-      // טיפול בשגיאות
       if (error.message === 'Question not found') {
         return res.status(404).json({ error: 'השאלה לא נמצאה' });
       }
@@ -186,34 +192,30 @@ const questionController = {
 
   /**
    * GET /api/questions/:id
-   * קבלת שאלה בודדת
+   * שליפת פרטי שאלה בודדת
    */
   async getQuestion(req, res) {
     try {
       const { id } = req.params;
       const question = await questionService.getQuestionById(id);
-
       res.status(200).json({ question });
     } catch (error) {
       console.error('Get Question Error:', error);
-
       if (error.message === 'Question not found') {
         return res.status(404).json({ error: 'השאלה לא נמצאה' });
       }
-
       res.status(500).json({ error: 'שגיאה בשליפת השאלה' });
     }
   },
 
   /**
    * GET /api/games/:gameId/questions
-   * קבלת כל השאלות במשחק
+   * שליפת כל השאלות של משחק ספציפי
    */
   async getGameQuestions(req, res) {
     try {
       const { gameId } = req.params;
       const questions = await questionService.getGameQuestions(gameId);
-
       res.status(200).json({
         gameId,
         count: questions.length,
@@ -221,11 +223,9 @@ const questionController = {
       });
     } catch (error) {
       console.error('Get Game Questions Error:', error);
-
       if (error.message === 'Game not found') {
         return res.status(404).json({ error: 'המשחק לא נמצא' });
       }
-
       res.status(500).json({ error: 'שגיאה בשליפת השאלות' });
     }
   },
