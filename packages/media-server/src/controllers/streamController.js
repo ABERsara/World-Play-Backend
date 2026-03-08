@@ -1,3 +1,4 @@
+// Media Server - stream.controller.js
 import { StreamService } from '../services/stream.service.js';
 
 export const StreamController = {
@@ -5,26 +6,29 @@ export const StreamController = {
     const { streamId } = req.params;
 
     console.log(`📹 Received stream request for: ${streamId}`);
-    console.log(`🔍 Headers:`, req.headers);
 
     try {
-      // בדיקה אם השידור כבר קיים
       if (StreamService.getActiveStreams().has(streamId)) {
         console.log(`⚠️ Stream ${streamId} already exists`);
         return res.status(409).json({ error: 'Stream already running' });
       }
 
-      // **חשוב מאוד**: אל תשלח response מיד!
-      // req הוא Stream שממשיך לזרום, אז אנחנו מעבירים אותו ל-Service
-
       console.log(`✅ Starting stream processing for ${streamId}`);
 
-      await StreamService.startStream(streamId, req, res);
+      // *** שחרר response מיד ***
+      res.status(200).json({
+        message: 'Stream ingestion started successfully',
+        streamId,
+        watchUrl: `http://localhost:8000/hls/${streamId}/index.m3u8`,
+      });
 
-      // הערה: res.end() יקרה ב-Service כשה-stream יסתיים
+      // *** עכשיו תן ל-Service לעבוד ברקע ***
+      // החשוב: req הוא Stream שממשיך לקבל data גם אחרי שה-response נשלח
+      await StreamService.startStream(streamId, req);
     } catch (error) {
       console.error(`❌ Controller Error [${streamId}]:`, error.message);
 
+      // רק אם לא שלחנו response עדיין
       if (!res.headersSent) {
         res.status(500).json({ error: error.message });
       }

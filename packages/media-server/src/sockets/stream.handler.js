@@ -1,13 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import * as msService from '../services/mediasoup.service.js';
 import { logger } from '../utils/logger.js';
+import { StreamService } from '../services/stream.service.js';
 
 const prisma = new PrismaClient();
 
 export const streams = {};
 const transports = {};
 const producers = {};
-const consumers = {};
 
 export const registerStreamHandlers = (io, socket) => {
   const user = socket.user;
@@ -46,6 +46,7 @@ export const registerStreamHandlers = (io, socket) => {
           router,
           hostSocketId: socket.id,
           hostUserId: user ? user.id : 'dev-host',
+          transports: new Map(), // הוספנו מפה לניהול טרנספורטים בתוך החדר
         };
       }
       callback({ rtpCapabilities: streams[streamId].router.rtpCapabilities });
@@ -65,9 +66,12 @@ export const registerStreamHandlers = (io, socket) => {
         if (dtlsState === 'closed') {
           transport.close();
           delete transports[transport.id];
+          streamRoom.transports.delete(transport.id);
         }
       });
       transports[transport.id] = transport;
+      streamRoom.transports.set(transport.id, transport); // שמירה בחדר עבור ה-Consume
+
       callback({
         id: transport.id,
         iceParameters: transport.iceParameters,
@@ -93,63 +97,144 @@ export const registerStreamHandlers = (io, socket) => {
     }
   );
 
-  socket.on(
-    'stream:produce',
-    async ({ transportId, kind, rtpParameters, streamId }, callback) => {
-      try {
-        const transport = transports[transportId];
-        if (!transport) return callback({ error: 'Transport not found' });
-        const producer = await transport.produce({ kind, rtpParameters });
-        producers[producer.id] = producer;
-        if (streams[streamId]) streams[streamId].producerId = producer.id;
-        socket
-          .to(streamId)
-          .emit('stream:new_producer', { producerId: producer.id });
+  socket.on('stream:produce', async (data, callback) => {
+    try {
+      let actualData = data;
 
-        if (kind === 'video') {
-          await prisma.stream.update({
-            where: { id: streamId },
-            data: { status: 'LIVE', startTime: new Date() },
-          });
-        }
-        callback({ id: producer.id });
-      } catch (error) {
-        callback({ error: error.message });
-      }
-    }
-  );
+      if (Array.isArray(data)) actualData = data[0];
 
-  socket.on(
-    'stream:consume',
-    async (
-      { transportId, producerId, rtpCapabilities, streamId },
-      callback
-    ) => {
-      try {
-        const transport = transports[transportId];
-        const streamRoom = streams[streamId];
-        if (!transport || !streamRoom) return callback({ error: 'Not found' });
-        if (!streamRoom.router.canConsume({ producerId, rtpCapabilities })) {
-          return callback({ error: 'Cannot consume' });
+      if (typeof actualData === 'string') {
+        try {
+          actualData = JSON.parse(actualData.trim());
+        } catch (parseError) {
+          console.error(
+            ' JSON Parse failed:',
+            parseError.message,
+            'String received:',
+            actualData
+          );
         }
-        const consumer = await transport.consume({
-          producerId,
-          rtpCapabilities,
-          paused: true,
-        });
-        consumers[consumer.id] = consumer;
-        callback({
-          id: consumer.id,
-          producerId,
-          kind: consumer.kind,
-          rtpParameters: consumer.rtpParameters,
-        });
-        await consumer.resume();
-      } catch (error) {
-        callback({ error: error.message });
       }
+
+      console.log('DEBUG FINAL OBJECT:', actualData);
+
+      // שינוי ל-let כי אנחנו עשויים לעדכן את rtpParameters
+      let { transportId, kind, rtpParameters, streamId } = actualData || {};
+
+      if (!kind) {
+        console.error(' Kind is missing! Type of data:', typeof actualData);
+        if (typeof callback === 'function')
+          callback({ error: 'kind is required' });
+        return;
+      }
+
+      const streamRoom = streams[streamId];
+      if (!streamRoom)
+        throw new Error('Room not found. Call stream:create_room first.');
+
+      let transport = transports[transportId];
+      if (!transport) {
+        console.log(`Creating temporary transport for testing...`);
+        transport = await msService.createWebRtcTransport(streamRoom.router);
+        transports[transport.id] = transport;
+        streamRoom.transports.set(transport.id, transport);
+        console.log(`Temporary transport created with ID: ${transport.id}`);
+      }
+
+      // 2. הוספת Codecs ו-Encodings אם הם חסרים
+      if (
+        !rtpParameters ||
+        !rtpParameters.codecs ||
+        rtpParameters.codecs.length === 0
+      ) {
+        rtpParameters = {
+          mid: 'v',
+          codecs: [
+            {
+              mimeType: 'video/vp8',
+              payloadType: 101,
+              clockRate: 90000,
+              parameters: { 'x-google-start-bitrate': 1000 },
+            },
+          ],
+          encodings: [{ ssrc: 11111111 }],
+        };
+      } else if (
+        !rtpParameters.encodings ||
+        rtpParameters.encodings.length === 0
+      ) {
+        rtpParameters.encodings = [{ ssrc: 11111111 }];
+      }
+
+      // 3. יצירת ה-Producer
+      const producer = await transport.produce({ kind, rtpParameters });
+      producers[producer.id] = producer;
+
+      // 4. בדיקת תפקיד והפעלת FFmpeg
+      const role = await validateParticipantRole(streamId, socket.user.id);
+
+      if (kind === 'video' && (role === 'HOST' || role === 'PLAYER')) {
+        console.log(`🚀 [STREAM B] Launching FFmpeg Pipeline...`);
+
+        await prisma.stream.update({
+          where: { id: streamId },
+          data: { status: 'LIVE', startTime: new Date() },
+        });
+
+        await StreamService.startRecording(
+          streamId,
+          streamRoom.router,
+          producer
+        );
+      }
+
+      if (typeof callback === 'function') callback({ id: producer.id });
+      console.log(`✅ Success! Stream ID: ${streamId}`);
+    } catch (err) {
+      console.error('❌ Produce Error:', err.message);
+      if (typeof callback === 'function') callback({ error: err.message });
     }
-  );
+  });
+
+  socket.on('stream:consume', async (data, callback) => {
+    try {
+      const actualData =
+        typeof data === 'string' ? JSON.parse(data.trim()) : data;
+      const { streamId, transportId, producerId, rtpCapabilities } = actualData;
+
+      console.log(`📡 [CONSUME] Request for producer: ${producerId}`);
+
+      const room = streams[streamId];
+      if (!room) return callback({ error: 'Room not found' });
+
+      const transport = room.transports.get(transportId);
+      if (!transport) return callback({ error: 'Transport not found' });
+
+      if (!room.router.canConsume({ producerId, rtpCapabilities })) {
+        return callback({ error: 'Cannot consume' });
+      }
+
+      const consumer = await transport.consume({
+        producerId,
+        rtpCapabilities,
+        paused: false,
+      });
+
+      consumer.on('transportclose', () => {
+        console.log('Consumer transport closed');
+      });
+
+      callback({
+        id: consumer.id,
+        producerId,
+        kind: consumer.kind,
+        rtpParameters: consumer.rtpParameters,
+      });
+    } catch (consumeError) {
+      console.error('❌ Consume error:', consumeError);
+      callback({ error: consumeError.message });
+    }
+  });
 
   socket.on('stream:join', async ({ streamId }, callback) => {
     try {
@@ -189,3 +274,10 @@ export const handleCloseStream = async (streamId, io) => {
   io.to(streamId).emit('stream:ended', { streamId });
   delete streams[streamId];
 };
+
+async function validateParticipantRole(streamId, userId) {
+  const participant = await prisma.gameParticipant.findFirst({
+    where: { game: { streamId }, userId },
+  });
+  return participant?.role || 'VIEWER';
+}

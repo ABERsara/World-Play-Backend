@@ -1,7 +1,9 @@
 FROM node:20-alpine
 WORKDIR /usr/src/app
 
-RUN apk add --no-cache openssl
+# התקנת תשתיות דרושות - שימוש ב-apk עבור Alpine
+# הוספנו את ffmpeg כאן
+RUN apk add --no-cache openssl ffmpeg
 
 COPY package.json ./
 COPY packages/server/package*.json ./packages/server/
@@ -17,7 +19,6 @@ RUN npx prisma generate --schema=./packages/server/prisma/schema.prisma
 
 WORKDIR /usr/src/app/packages/server
 
-# שינוי לפורט 8080
 EXPOSE 8080
 
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]

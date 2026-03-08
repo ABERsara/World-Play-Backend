@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Viewer Test Lab 🍿</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; }
+        video { width: 640px; height: 480px; background: black; border: 2px solid #2ecc71; margin: 20px; }
+        #logs { width: 80%; height: 200px; background: #111; border: 1px solid #444; overflow-y: scroll; padding: 10px; font-family: monospace; }
+        .status { color: #f1c40f; }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="mediasoup-client.min.js"></script>
+</head>
+<body>
+
+    <h1>Viewer Test Lab 🍿</h1>
+    <h3 id="connectionStatus" class="status">Disconnected</h3>
+    
+    <video id="remoteVideo" autoplay playsinline controls></video>
+    
+    <button onclick="joinStream()" id="btnJoin">Join Stream</button>
+    
+    <h3>Viewer Logs:</h3>
+    <div id="logs"></div>
+
+    <script>
+        // --- הגדרות צופה ---
+        const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjNlZDMyNzQzLTAwMDQtNGMyYy05YTY3LWJiNDNlMWRlZTU1ZiIsInJvbGUiOiJWSUVXRVIiLCJlbWFpbCI6IlZJRVdFUkB0ZXN0LmNvbSIsImlhdCI6MTc2NjMxNzU3OCwiZXhwIjoxNzY2MzE5Mzc4fQ.NpLA7VQXGNtY3UX6ecmB9gpPKaOoFkprDH2nWGKLA4M"; 
+        
+        const STREAM_ID = "c3a5047a-4088-41fd-b249-3748d9cf4193"; 
+
+        const socket = io({
+            auth: { token: TOKEN }
+        });
+
+        let device;
+        let consumerTransport;
+        
+        const log = (msg, isError = false) => {
+            const div = document.getElementById('logs');
+            div.innerHTML += `<span style="color: ${isError ? 'red' : '#0f0'}">> ${msg}</span><br>`;
+            div.scrollTop = div.scrollHeight;
+            console.log(msg);
+        };
+
+        const sendRequest = (type, data) => {
+            return new Promise((resolve, reject) => {
+                socket.emit(type, data, (response) => {
+                    if (response && response.error) reject(new Error(response.error));
+                    else resolve(response);
+                });
+            });
+        };
+
+        socket.on('connect', () => {
+            document.getElementById('connectionStatus').innerText = "Connected ✅";
+            document.getElementById('connectionStatus').style.color = "#2ecc71";
+            log('Connected to server as Viewer');
+        });
+
+        // --- האזנה לאירוע: יש שידור חדש! ---
+        socket.on('stream:new_producer', async ({ producerId }) => {
+            log(`🎥 New Producer detected: ${producerId}`);
+            await consumeStream(producerId);
+        });
+
+        async function joinStream() {
+            try {
+                log('Attempting to join stream...');
+                
+                // 1. בקשת הצטרפות
+        const data = await sendRequest('stream:join', { streamId: STREAM_ID });
+        log('Joined stream room successfully');
+                // 2. טעינת Mediasoup Device
+        device = new MediasoupClient.Device();
+        await device.load({ routerRtpCapabilities: data.rtpCapabilities });
+        log('Mediasoup Device loaded');
+               
+                // 3. יצירת Transport לקליטה (Recv)
+                const transportParams = await sendRequest('stream:create_transport', { streamId: STREAM_ID });
+                consumerTransport = device.createRecvTransport(transportParams);
+
+                consumerTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+                    try {
+                        await sendRequest('stream:connect_transport', {
+                            transportId: consumerTransport.id,
+                            dtlsParameters,
+                        });
+                        callback();
+                    } catch (error) { errback(error); }
+                });
+// === התיקון: בדיקה אם השידור כבר התחיל ===
+        if (data.currentProducerId) {
+            log(`🎥 Stream is already live! Consuming producer: ${data.currentProducerId}`);
+            await consumeStream(data.currentProducerId);
+        } else {
+            log('✅ Ready to consume! Waiting for Host to start broadcasting...');
+        }
+
+            } catch (err) {
+                log('❌ Error joining: ' + err.message, true);
+            }
+        }
+
+        async function consumeStream(producerId) {
+            try {
+                const { rtpCapabilities } = device;
+                
+                // 4. שליחת בקשת Consume
+                const data = await sendRequest('stream:consume', {
+                    transportId: consumerTransport.id,
+                    producerId,
+                    rtpCapabilities,
+                    streamId: STREAM_ID
+                });
+
+                const consumer = await consumerTransport.consume({
+                    id: data.id,
+                    producerId: data.producerId,
+                    kind: data.kind,
+                    rtpParameters: data.rtpParameters,
+                });
+
+                const stream = new MediaStream();
+                stream.addTrack(consumer.track);
+                
+                document.getElementById('remoteVideo').srcObject = stream;
+                log('📺 Video received! Playing stream.');
+
+                // Resume (חובה ב-Mediasoup Client לפעמים)
+                socket.emit('stream:resume', { consumerId: data.id }); // אופציונלי, תלוי במימוש השרת
+
+            } catch (err) {
+                log('❌ Error consuming: ' + err.message, true);
+            }
+        }
+    </script>
+</body>
+</html>

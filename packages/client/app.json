@@ -9,11 +9,16 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.yourname.worldplay", 
       "supportsTablet": true,
-      "bitcode": false
+      "bitcode": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "WorldPlay needs access to your camera to stream video.",
+        "NSMicrophoneUsageDescription": "WorldPlay needs access to your microphone to stream audio."
+      }
     },
     "android": {
-      "adaptiveIcon": {
+       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
@@ -22,29 +27,31 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.CAMERA",
-        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH"
       ],
-      "package": "com.anonymous.client"
+     "package": "com.yourname.worldplay",
+  "versionCode": 1
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      [
-        "@config-plugins/react-native-webrtc",
-        {
-          "cameraPermission": "Allow the app to access your camera to stream video.",
-          "microphonePermission": "Allow the app to access your microphone to stream audio."
-        }
-      ],
+     [
+    "@config-plugins/react-native-webrtc", 
+    {
+      "cameraPermission": "Allow WorldPlay to access your camera",
+      "microphonePermission": "Allow WorldPlay to access your microphone"
+    }
+  ],
       [
         "expo-splash-screen",
         {
