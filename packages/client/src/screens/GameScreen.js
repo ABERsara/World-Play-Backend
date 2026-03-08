@@ -37,7 +37,6 @@ Badge.propTypes = {
   color: PropTypes.string,
 };
 Badge.defaultProps = { color: '#ffa502' };
-
 const badge = StyleSheet.create({
   wrap: {
     borderWidth: 1,
@@ -57,7 +56,6 @@ Card.propTypes = {
   style: PropTypes.oneOfType([PropTypes.object, PropTypes.array]),
 };
 Card.defaultProps = { style: null };
-
 const card = StyleSheet.create({
   wrap: {
     backgroundColor: '#111827',
@@ -97,7 +95,6 @@ Field.propTypes = {
   keyboardType: PropTypes.string,
 };
 Field.defaultProps = { placeholder: '', keyboardType: 'default' };
-
 const field = StyleSheet.create({
   label: {
     color: '#9ca3af',
@@ -144,7 +141,6 @@ Btn.propTypes = {
   loading: PropTypes.bool,
 };
 Btn.defaultProps = { color: '#ffa502', disabled: false, loading: false };
-
 const btn = StyleSheet.create({
   wrap: { borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 4 },
   text: { fontWeight: '800', fontSize: 14, letterSpacing: 0.5 },
@@ -160,13 +156,48 @@ const NoQuestion = () => (
   </Card>
 );
 
-// ─── יצירת שאלה ──────────────────────────────────────────────
+// ─── יצירת / טעינת שאלה ──────────────────────────────────────
 const CreateQuestionSection = ({ gameId, onCreated }) => {
+  const [mode, setMode] = useState('create');
   const [questionText, setQuestionText] = useState('');
   const [player1Name, setPlayer1Name] = useState('');
   const [player1Id, setPlayer1Id] = useState('');
   const [player2Name, setPlayer2Name] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [openQuestions, setOpenQuestions] = useState([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [selectedQ, setSelectedQ] = useState(null);
+
+  const fetchOpenQuestions = async () => {
+    if (!gameId) return Alert.alert('שגיאה', 'הכנס Game ID קודם');
+    setLoadingList(true);
+    setOpenQuestions([]);
+    setSelectedQ(null);
+    try {
+      const headers = await getAuthHeaders();
+      // ✅ URL תואם ל-route: GET /api/questions/game/:gameId
+      const res = await fetch(`${BASE_URL}/questions/game/${gameId}`, {
+        headers,
+      });
+      const text = await res.text();
+      if (text.startsWith('<')) {
+        Alert.alert('שגיאה', 'תגובה לא תקינה מהשרת');
+        return;
+      }
+      const data = JSON.parse(text);
+      const questions = Array.isArray(data) ? data : data.questions || [];
+      const open = questions.filter((q) => !q.isResolved);
+      if (open.length === 0)
+        Alert.alert('אין שאלות', 'לא נמצאו שאלות פתוחות במשחק זה');
+      setOpenQuestions(open);
+    } catch (e) {
+      console.error('Fetch open questions error:', e);
+      Alert.alert('שגיאה', 'בעיית תקשורת');
+    } finally {
+      setLoadingList(false);
+    }
+  };
 
   const handleCreate = async () => {
     if (!questionText.trim()) return Alert.alert('שגיאה', 'חסר טקסט שאלה');
@@ -188,14 +219,12 @@ const CreateQuestionSection = ({ gameId, onCreated }) => {
           { text: player2Name, isCorrect: false },
         ],
       };
-      console.log('➕ Creating question, gameId:', gameId);
       const res = await fetch(`${BASE_URL}/questions`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
       });
       const text = await res.text();
-      console.log('➕ Response:', res.status, text);
       let data;
       try {
         data = JSON.parse(text);
@@ -217,40 +246,127 @@ const CreateQuestionSection = ({ gameId, onCreated }) => {
     }
   };
 
+  const handleSelectQuestion = (q) => {
+    setSelectedQ(q);
+    onCreated(q);
+    Alert.alert('✅ שאלה נטענה', q.questionText || q.text || q.id);
+  };
+
   return (
     <Card>
-      <Badge label="➕ שאלה חדשה" color="#60a5fa" />
+      <View style={modeStyles.row}>
+        <TouchableOpacity
+          style={[modeStyles.btn, mode === 'create' && modeStyles.btnActive]}
+          onPress={() => setMode('create')}
+        >
+          <Text
+            style={[
+              modeStyles.btnText,
+              mode === 'create' && modeStyles.btnTextActive,
+            ]}
+          >
+            ➕ צור חדשה
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[modeStyles.btn, mode === 'load' && modeStyles.btnActive]}
+          onPress={() => {
+            setMode('load');
+            fetchOpenQuestions();
+          }}
+        >
+          <Text
+            style={[
+              modeStyles.btnText,
+              mode === 'load' && modeStyles.btnTextActive,
+            ]}
+          >
+            📋 טען קיימת
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={{ height: 14 }} />
-      <Field
-        label="טקסט השאלה"
-        value={questionText}
-        onChangeText={setQuestionText}
-        placeholder="מי ינצח?"
-      />
-      <Field
-        label="שחקן א׳ – שם"
-        value={player1Name}
-        onChangeText={setPlayer1Name}
-        placeholder="שם שחקן א'"
-      />
-      <Field
-        label="שחקן א׳ – Player ID (אופציונלי)"
-        value={player1Id}
-        onChangeText={setPlayer1Id}
-        placeholder="uuid..."
-      />
-      <Field
-        label="שחקן ב׳ – שם"
-        value={player2Name}
-        onChangeText={setPlayer2Name}
-        placeholder="שם שחקן ב'"
-      />
-      <Btn
-        label="צור שאלה"
-        onPress={handleCreate}
-        color="#60a5fa"
-        loading={loading}
-      />
+
+      {mode === 'create' && (
+        <>
+          <Badge label="➕ שאלה חדשה" color="#60a5fa" />
+          <View style={{ height: 14 }} />
+          <Field
+            label="טקסט השאלה"
+            value={questionText}
+            onChangeText={setQuestionText}
+            placeholder="מי ינצח?"
+          />
+          <Field
+            label="שחקן א׳ – שם"
+            value={player1Name}
+            onChangeText={setPlayer1Name}
+            placeholder="שם שחקן א'"
+          />
+          <Field
+            label="שחקן א׳ – Player ID (אופציונלי)"
+            value={player1Id}
+            onChangeText={setPlayer1Id}
+            placeholder="uuid..."
+          />
+          <Field
+            label="שחקן ב׳ – שם"
+            value={player2Name}
+            onChangeText={setPlayer2Name}
+            placeholder="שם שחקן ב'"
+          />
+          <Btn
+            label="צור שאלה"
+            onPress={handleCreate}
+            color="#60a5fa"
+            loading={loading}
+          />
+        </>
+      )}
+
+      {mode === 'load' && (
+        <>
+          <Badge label="📋 שאלות פתוחות" color="#fbbf24" />
+          <View style={{ height: 12 }} />
+          {loadingList && (
+            <ActivityIndicator color="#fbbf24" style={{ marginVertical: 20 }} />
+          )}
+          {!loadingList && openQuestions.length === 0 && (
+            <Text
+              style={{
+                color: '#6b7280',
+                textAlign: 'center',
+                paddingVertical: 16,
+              }}
+            >
+              אין שאלות פתוחות
+            </Text>
+          )}
+          {openQuestions.map((q) => (
+            <TouchableOpacity
+              key={q.id}
+              style={[
+                loadStyles.item,
+                selectedQ?.id === q.id && loadStyles.itemSelected,
+              ]}
+              onPress={() => handleSelectQuestion(q)}
+            >
+              <Text style={loadStyles.itemText} numberOfLines={2}>
+                {q.questionText || q.text || '—'}
+              </Text>
+              <Text style={loadStyles.itemId}>{q.id?.slice(0, 8)}…</Text>
+            </TouchableOpacity>
+          ))}
+          {!loadingList && (
+            <Btn
+              label="🔄 רענן רשימה"
+              onPress={fetchOpenQuestions}
+              color="#374151"
+            />
+          )}
+        </>
+      )}
     </Card>
   );
 };
@@ -258,6 +374,41 @@ CreateQuestionSection.propTypes = {
   gameId: PropTypes.string.isRequired,
   onCreated: PropTypes.func.isRequired,
 };
+
+const modeStyles = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 10 },
+  btn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: '#1f2937',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  btnActive: { backgroundColor: '#ffa50222', borderColor: '#ffa502' },
+  btnText: { color: '#6b7280', fontWeight: '700', fontSize: 13 },
+  btnTextActive: { color: '#ffa502' },
+});
+const loadStyles = StyleSheet.create({
+  item: {
+    backgroundColor: '#1f2937',
+    borderRadius: 10,
+    padding: 13,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  itemSelected: { borderColor: '#fbbf24', backgroundColor: '#fbbf2411' },
+  itemText: {
+    color: '#f9fafb',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  itemId: { color: '#6b7280', fontSize: 11 },
+});
 
 // ─── סגירת שאלה ──────────────────────────────────────────────
 const ResolveQuestionSection = ({ question }) => {
@@ -322,7 +473,6 @@ ResolveQuestionSection.propTypes = {
   }),
 };
 ResolveQuestionSection.defaultProps = { question: null };
-
 const resolve = StyleSheet.create({
   questionText: {
     color: '#e5e7eb',
@@ -423,7 +573,6 @@ BettingSection.propTypes = {
   }),
 };
 BettingSection.defaultProps = { question: null };
-
 const bet = StyleSheet.create({
   questionText: {
     color: '#e5e7eb',
@@ -475,14 +624,12 @@ const SendGiftSection = ({ gameId }) => {
         giftValue: Number(giftValue),
         gameId: giftGameId,
       };
-      console.log('🎁 Sending gift:', JSON.stringify(body));
       const res = await fetch(`${BASE_URL}/economy/gifts/send`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
       });
       const text = await res.text();
-      console.log('🎁 Response:', res.status, text);
       let data;
       try {
         data = JSON.parse(text);
@@ -569,9 +716,7 @@ const SendGiftSection = ({ gameId }) => {
     </Card>
   );
 };
-SendGiftSection.propTypes = {
-  gameId: PropTypes.string.isRequired,
-};
+SendGiftSection.propTypes = { gameId: PropTypes.string.isRequired };
 
 // ─────────────────────────────────────────────────────────────
 // Main GameScreen
@@ -581,7 +726,6 @@ const GameScreen = ({ gameId: gameIdProp }) => {
   const walletBalance = useSelector((state) => state.wallet.walletBalance || 0);
   const isModerator = true;
 
-  // ← GameID נכתב ידנית כאן
   const [resolvedGameId, setResolvedGameId] = useState(gameIdProp || '');
   const [activeQuestion, setActiveQuestion] = useState(null);
   const [activeTab, setActiveTab] = useState('question');
@@ -594,9 +738,8 @@ const GameScreen = ({ gameId: gameIdProp }) => {
     if (!gId) return;
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(`${BASE_URL}/games/${gId}/questions`, {
-        headers,
-      });
+      // ✅ URL תואם ל-route: GET /api/questions/game/:gameId
+      const res = await fetch(`${BASE_URL}/questions/game/${gId}`, { headers });
       const text = await res.text();
       if (text.startsWith('<')) return;
       const data = JSON.parse(text);
@@ -649,11 +792,8 @@ const GameScreen = ({ gameId: gameIdProp }) => {
 
   return (
     <View style={styles.root}>
-      {/* ─── Header ─── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>פאנל ניהול</Text>
-        </View>
+        <Text style={styles.headerTitle}>פאנל ניהול</Text>
         <View style={styles.statsRow}>
           <View style={styles.statChip}>
             <Text style={styles.statChipLabel}>ארנק</Text>
@@ -670,7 +810,6 @@ const GameScreen = ({ gameId: gameIdProp }) => {
         </View>
       </View>
 
-      {/* ─── Game ID Input ─── */}
       <View style={styles.gameIdRow}>
         <Text style={styles.gameIdLabel}>Game ID</Text>
         <TextInput
@@ -764,8 +903,6 @@ const styles = StyleSheet.create({
   },
   statChipLabel: { color: '#6b7280', fontSize: 10, marginBottom: 2 },
   statChipVal: { fontWeight: '800', fontSize: 16 },
-
-  // Game ID row
   gameIdRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -793,7 +930,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#374151',
   },
-
   tabBar: {
     flexDirection: 'row',
     backgroundColor: '#0a0f1a',

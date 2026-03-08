@@ -38,7 +38,7 @@ router.patch('/:id/resolve', questionController.resolveQuestion);
  * שליפת שאלה בודדת עם כל הפרטים
  */
 router.get('/:id', questionController.getQuestion);
-
+router.get('/:gameId/questions', questionController.getGameQuestions);
 /**
  * GET /api/games/:gameId/questions
  * שליפת כל השאלות במשחק ספציפי
