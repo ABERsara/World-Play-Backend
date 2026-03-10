@@ -295,6 +295,7 @@ enum TransactionType {
   GIFT
   REFUND
   WINNER_PAYOUT
+  CORRECT_ANSWER
 }
 
 enum TransactionStatus {

@@ -59,7 +59,6 @@ const economyService = {
           data: { walletBalance: { increment: baseShare } },
         });
 
-        // ✅ upsert — יצור את הרשומה אם לא קיימת
         await tx.gameParticipant.upsert({
           where: { gameId_userId: { gameId, userId: playerId } },
           update: { score: { increment: baseShare } },
@@ -127,7 +126,6 @@ const economyService = {
         data: { walletBalance: { increment: winnerShare } },
       });
 
-      // ✅ upsert — יצור את הרשומה אם לא קיימת
       await tx.gameParticipant.upsert({
         where: { gameId_userId: { gameId, userId: winnerId } },
         update: { score: { increment: winnerShare } },
@@ -170,12 +168,66 @@ const economyService = {
   },
 
   // ========================================
-  // 3. מערכת מתנות (Gifts)
+  // 3. זיכוי תשובה נכונה - STANDARD בלבד
+  //    מי שענה נכון מקבל 125% מההימור שלו
+  // ========================================
+
+  async rewardCorrectAnswer(userId, questionId, gameId) {
+    return await prisma.$transaction(async (tx) => {
+      // מצא את ההימור של המשתמש על שאלה זו
+      const answer = await tx.userAnswer.findFirst({
+        where: { userId, questionId },
+      });
+
+      if (!answer) return { rewarded: false };
+
+      // 125% מההימור המקורי
+      const reward = Math.floor(this._toNumber(answer.wager) * 1.25);
+
+      // זיכוי הארנק
+      await tx.user.update({
+        where: { id: userId },
+        data: { walletBalance: { increment: reward } },
+      });
+
+      // עדכון ניקוד במשחק
+      await tx.gameParticipant.upsert({
+        where: { gameId_userId: { gameId, userId } },
+        update: { score: { increment: reward } },
+        create: {
+          gameId,
+          userId,
+          score: reward,
+          role: 'VIEWER',
+        },
+      });
+
+      // תיעוד בטבלת Transactions
+      await tx.transaction.create({
+        data: {
+          userId,
+          type: 'CORRECT_ANSWER',
+          amount: reward,
+          gameId,
+          currency: 'COIN',
+          status: 'SUCCESS',
+        },
+      });
+
+      return {
+        rewarded: true,
+        reward,
+        originalWager: this._toNumber(answer.wager),
+      };
+    });
+  },
+
+  // ========================================
+  // 4. מערכת מתנות (Gifts)
   // ========================================
 
   async sendGift(senderId, receiverPlayerId, moderatorId, giftValue, gameId) {
     return await prisma.$transaction(async (tx) => {
-      // ✅ ולידציה: בדוק שה-game קיים לפני הכל
       const game = await tx.game.findUnique({ where: { id: gameId } });
       if (!game) throw new Error(`Game not found: ${gameId}`);
 
@@ -202,7 +254,6 @@ const economyService = {
         data: { walletBalance: { increment: hostShare } },
       });
 
-      // ✅ upsert — יצור את רשומת המשתתף אם לא קיימת, במקום לקרוס
       await tx.gameParticipant.upsert({
         where: { gameId_userId: { gameId, userId: receiverPlayerId } },
         update: { score: { increment: playerShare } },

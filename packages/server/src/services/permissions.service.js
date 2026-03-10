@@ -1,3 +1,5 @@
+// src/services/permissions.service.js
+
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
@@ -21,7 +23,17 @@ const permissionsService = {
       },
     });
 
-    if (!participant || participant.role !== requiredRole) {
+    if (!participant) {
+      throw new Error(
+        `Permission denied: You must be a ${requiredRole} to perform this action.`
+      );
+    }
+
+    // HOST יכול לעשות הכל מה שMODERATOR יכול
+    const allowedRoles =
+      requiredRole === 'MODERATOR' ? ['MODERATOR', 'HOST'] : [requiredRole];
+
+    if (!allowedRoles.includes(participant.role)) {
       throw new Error(
         `Permission denied: You must be a ${requiredRole} to perform this action.`
       );
