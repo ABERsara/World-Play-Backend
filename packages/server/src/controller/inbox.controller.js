@@ -1,13 +1,9 @@
 import inboxService from '../services/inbox.service.js';
 
 const inboxController = {
-  /**
-   * שליפת כל פריטי ה-Inbox עבור המשתמש המחובר
-   */
   getInbox: async (req, res) => {
     try {
       const userId = req.user.id;
-
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 5;
 
@@ -19,12 +15,11 @@ const inboxController = {
         pagination: {
           page,
           limit,
-          hasMore: result.hasMore,
-          total: result.totalCount,
+          hasMore: result.pagination.hasMore,
+          total: result.pagination.totalCount,
         },
       });
     } catch (error) {
-      // כאן הוספתי את השימוש ב-error כדי לעבור את ה-Husky
       console.error('[INBOX_CONTROLLER_GET_ERROR]', error.message);
       return res.status(500).json({
         success: false,
@@ -33,9 +28,6 @@ const inboxController = {
     }
   },
 
-  /**
-   * סימון פריט ספציפי כ"נקרא"
-   */
   markAsRead: async (req, res) => {
     try {
       const { id } = req.params;
@@ -57,6 +49,13 @@ const inboxController = {
       });
     } catch (error) {
       console.error('[INBOX_CONTROLLER_MARK_ERROR]', error.message);
+
+      if (error.message === 'Unauthorized') {
+        return res.status(403).json({
+          success: false,
+          message: 'אין הרשאה לבצע פעולה זו',
+        });
+      }
 
       if (error.message.includes('Record to update not found')) {
         return res.status(404).json({
