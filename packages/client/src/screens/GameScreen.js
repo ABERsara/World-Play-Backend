@@ -57,7 +57,6 @@ const GameScreen = ({ gameId }) => {
         );
       }
     };
-
     socket.on('balance_update', handleBalanceUpdate);
 
     // 3. ניקוי (Cleanup) - קריטי למניעת באגים!

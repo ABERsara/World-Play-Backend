@@ -80,24 +80,22 @@ export const StreamService = {
   //     }
   //   },
   async startRecording(streamId, router, producer) {
-    if (activeStreams.has(streamId)) return;
+  if (activeStreams.has(streamId)) return;
 
-    const streamPath = this._ensureDirectory(streamId);
+  const streamPath = this._ensureDirectory(streamId);
 
-    try {
-      // 1. הקמת הצינור (Transport)
-      const transport = await createPlainTransportForFFmpeg(router);
+  try {
+    const transport = await createPlainTransportForFFmpeg(router);
 
-      // 2. חיבור הצינור לפורט המקומי של FFmpeg
-      const videoPort = 5004;
-      const rtcpPort = 5005; // פורט נוסף לבקרה
+    // נשתמש בפורטים מהטווח שפתחת ב-Docker!
+    const videoPort = 11000; 
+    const rtcpPort = 11001;
 
-      // חיבור הטרנספורט עם שני הפורטים
-      await transport.connect({
-        ip: '127.0.0.1',
-        port: videoPort,
-        rtcpPort: rtcpPort,
-      });
+    await transport.connect({
+      ip: '127.0.0.1',
+      port: videoPort,
+      rtcpPort: rtcpPort,
+    });
 
       // 3. יצירת הצרכן (Consumer) שמושך וידאו לצינור
       const consumer = await this._createConsumer(transport, producer, router);
@@ -129,72 +127,80 @@ export const StreamService = {
   },
 
   async _createConsumer(transport, producer, router) {
-    return await transport.consume({
+    const consumer = await transport.consume({
       producerId: producer.id,
       rtpCapabilities: router.rtpCapabilities,
       paused: false,
     });
-  },
 
-  _createSDPFile(streamPath, port, rtcpPort) {
-    const sdpContent = `v=0
+    // --- השורה שחסרה לך ---
+    // אנחנו מחכים רגע שהקונסיומר יתחיל ואז מבקשים פריים מלא
+    setTimeout(async () => {
+        try {
+            await consumer.requestKeyFrame();
+            console.log("🚀 [STREAM B] Keyframe requested for FFmpeg");
+        } catch (err) {
+            console.error("❌ Failed to request keyframe:", err);
+        }
+    }, 1000); 
+
+    return consumer;
+  },
+  
+_createSDPFile(streamPath, port, rtcpPort) {
+  const sdpContent = `v=0
 o=- 0 0 IN IP4 127.0.0.1
 s=Mediasoup Stream B
 c=IN IP4 127.0.0.1
 t=0 0
 m=video ${port} RTP/AVP 101
 a=rtpmap:101 H264/90000
+a=fmtp:101 packetization-mode=1;profile-level-id=42e01f;level-asymmetry-allowed=1
 a=rtcp:${rtcpPort}
 `;
-    const sdpPath = path.join(streamPath, 'input.sdp');
-    fs.writeFileSync(sdpPath, sdpContent);
-    return sdpPath;
-  },
+  const sdpPath = path.join(streamPath, 'input.sdp');
+  fs.writeFileSync(sdpPath, sdpContent);
+  return sdpPath;
+},
+ _spawnFFmpeg(sdpPath, streamPath, streamId) {
+  const args = [
+    '-loglevel', 'debug',                 // נשנה ל-debug זמנית כדי לראות הכל
+    '-protocol_whitelist', 'pipe,udp,rtp,file',
+    '-analyzeduration', '10000000',       // הגדלנו ל-10 שניות ניתוח
+    '-probesize', '10000000',             // הגדלנו ל-10MB פרובינג
+    '-f', 'sdp',
+    '-i', sdpPath,
 
-  _spawnFFmpeg(sdpPath, streamPath, streamId) {
-    const ffmpeg = spawn('ffmpeg', [
-      '-protocol_whitelist',
-      'pipe,udp,rtp,file',
-      '-i',
-      sdpPath,
-      '-vcodec',
-      'libx264',
-      '-crf',
-      '20',
-      '-preset',
-      'veryfast',
-      '-tune',
-      'zerolatency', // חשוב ללייב!
+    // וידאו - שימוש ב-copy הוא הכי בטוח כרגע למנוע שגיאות גודל
+    '-vcodec', 'copy', 
+    
+    // הגדרות HLS
+    '-f', 'hls',
+    '-hls_time', '2',
+    '-hls_list_size', '20',
+    '-hls_flags', 'delete_segments+append_list+split_by_time',
+    '-hls_segment_type', 'mpegts',        // פורמט תואם ל-H264 copy
+    path.join(streamPath, 'index.m3u8')
+  ];
 
-      // יצירת פוסטר
-      '-ss',
-      '00:00:00.500',
-      '-vframes',
-      '1',
-      path.join(streamPath, 'poster.png'),
+  console.log(`🚀 [FFMPEG] Executing: ffmpeg ${args.join(' ')}`);
 
-      // הגדרות HLS
-      '-f',
-      'hls',
-      '-hls_time',
-      '2',
-      '-hls_list_size',
-      '20',
-      '-hls_flags',
-      'delete_segments+append_list',
-      path.join(streamPath, 'index.m3u8'),
-    ]);
-    ffmpeg.stderr.on('data', (data) => {
-      // זה ידפיס ה-כ-ל מה-FFmpeg, גם אם זו לא שגיאה
-      console.log(`[FFMPEG DEBUG ${streamId}]: ${data.toString()}`);
-    });
+  const ffmpeg = spawn('ffmpeg', args);
 
-    ffmpeg.on('close', (code) => {
-      console.log(`[FFMPEG PROCESS] Process exited with code ${code}`);
-    });
+  ffmpeg.stderr.on('data', (data) => {
+    const msg = data.toString();
+    // הדפסת לוגים קריטיים בלבד כדי לא להציף
+    if (msg.includes('Error') || msg.includes('Warning') || msg.includes('Output')) {
+        console.log(`[FFMPEG LOG ${streamId}]: ${msg}`);
+    }
+  });
 
-    return ffmpeg;
-  },
+  ffmpeg.on('close', (code) => {
+    console.log(`[FFMPEG PROCESS] ${streamId} exited with code ${code}`);
+  });
+
+  return ffmpeg;
+},
 
   stopStream(streamId) {
     const stream = activeStreams.get(streamId);

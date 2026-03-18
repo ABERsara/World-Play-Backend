@@ -1,0 +1,6 @@
+{
+  "android": {
+    "usesCleartextTraffic": true,
+    "package": "com.anonymous.worldplayroot"
+  }
+}

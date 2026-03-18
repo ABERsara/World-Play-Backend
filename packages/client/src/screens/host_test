@@ -1,0 +1,83 @@
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, Button } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { socket, emitPromise } from '../services/socket.service';
+import { MediasoupManager } from '../services/MediasoupManager';
+import { initGameSession, setStreamStatus } from '../store/slices/gameStreamSlice';
+import axios from 'axios';
+
+export default function HostTestScreen() {
+  const dispatch = useDispatch();
+  const { status, streamId, role } = useSelector(state => state.gameStream);
+  const [localStatus, setLocalStatus] = useState('ממתין לפתיחת משחק...');
+  const localVideoRef = useRef(null);
+
+  const startHosting = async () => {
+    try {
+      setLocalStatus('יוצר משחק בשרת (DB)...');
+      
+      // 1. יצירת המשחק בשרת (זה מפעיל את הטרנזקציה שיוצרת גם Stream)
+const response = await axios.post('http://192.168.33.17:8000/api/games', { title: "Test" ,description: "בדיקת שידור וסנכרון"});
+       
+        
+      const gameData = response.data.game; 
+
+      
+      dispatch(initGameSession({
+        gameId: gameData.id,
+        streamId: gameData.streamId,
+        role: 'HOST'
+      }));
+
+      setLocalStatus('מתחבר ל-Mediasoup...');
+
+      // 3. התחברות לסוקט (stream:join) עם ה-streamId שקיבלנו מה-DB
+      const data = await emitPromise('stream:join', { 
+        streamId: gameData.streamId, 
+        role: 'HOST' 
+      });
+      
+      await MediasoupManager.initDevice(data.rtpCapabilities);
+
+      // 4. יצירת Transport ושידור
+      const sendTransport = await MediasoupManager.createTransport(socket, 'send', gameData.streamId);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+
+      const track = stream.getVideoTracks()[0];
+      await sendTransport.produce({ track });
+
+      // 5. עדכון סטטוס סופי
+      dispatch(setStreamStatus('ACTIVE'));
+      setLocalStatus('שידור מארח פעיל! 🔴 הוידאו מוזרם לשרת המדיה.');
+
+    } catch (err) {
+      setLocalStatus('שגיאה: ' + err.message);
+      console.error(err);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>מארח (Host) - יצירה ושידור</Text>
+      <Text style={styles.status}>{localStatus}</Text>
+      <Text style={styles.subText}>Stream ID: {streamId || 'טרם נוצר'}</Text>
+      
+      <View style={styles.videoBox}>
+        <video ref={localVideoRef} autoPlay playsInline muted style={styles.video} />
+      </View>
+      
+      <Button title="צור משחק ופתח שידור" onPress={startHosting} color="#ff4757" />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#1a1a1a', padding: 20, justifyContent: 'center' },
+  title: { color: '#fff', fontSize: 22, textAlign: 'center', marginBottom: 10 },
+  status: { color: '#ffa502', textAlign: 'center', marginBottom: 5 },
+  subText: { color: '#aaa', textAlign: 'center', marginBottom: 20, fontSize: 12 },
+  videoBox: { width: '100%', aspectRatio: 16/9, backgroundColor: '#000', marginBottom: 20 },
+  video: { width: '100%', height: '100%' }
+});

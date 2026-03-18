@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import * as msService from '../services/mediasoup.service.js';
 import { logger } from '../utils/logger.js';
 import { StreamService } from '../services/stream.service.js';
-
+import { SOCKET_EVENTS } from '@worldplay/shared';
 const prisma = new PrismaClient();
 
 export const streams = {};
@@ -16,7 +16,7 @@ export const registerStreamHandlers = (io, socket) => {
     logger.info(`Socket connected: ${user.username} (${user.id})`);
   }
 
-  socket.on('stream:init_broadcast', async (data, callback) => {
+  socket.on(SOCKET_EVENTS.STREAM.INIT_BROADCAST, async (data, callback) => {
     try {
       logger.info(`Initiating broadcast for user: ${user.id}`);
       const response = await fetch('http://app-server:8080/api/streams', {
@@ -37,7 +37,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on('stream:create_room', async ({ streamId }, callback) => {
+  socket.on((SOCKET_EVENTS.STREAM.CREATE_ROOM), async ({ streamId }, callback) => {
     try {
       if (!streams[streamId]) {
         const worker = msService.getWorker();
@@ -55,7 +55,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on('stream:create_transport', async ({ streamId }, callback) => {
+  socket.on((SOCKET_EVENTS.STREAM.CREATE_TRANSPORT), async ({ streamId }, callback) => {
     try {
       const streamRoom = streams[streamId];
       if (!streamRoom) return callback({ error: 'Stream Room not found' });
@@ -84,7 +84,7 @@ export const registerStreamHandlers = (io, socket) => {
   });
 
   socket.on(
-    'stream:connect_transport',
+    (SOCKET_EVENTS.STREAM.CONNECT_TRANSPORT),
     async ({ transportId, dtlsParameters }, callback) => {
       try {
         const transport = transports[transportId];
@@ -97,7 +97,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   );
 
-  socket.on('stream:produce', async (data, callback) => {
+  socket.on((SOCKET_EVENTS.STREAM.PRODUCE), async (data, callback) => {
     try {
       let actualData = data;
 
@@ -196,7 +196,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on('stream:consume', async (data, callback) => {
+  socket.on((SOCKET_EVENTS.STREAM.CONSUME), async (data, callback) => {
     try {
       const actualData =
         typeof data === 'string' ? JSON.parse(data.trim()) : data;
@@ -236,7 +236,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on('stream:join', async ({ streamId }, callback) => {
+  socket.on((SOCKET_EVENTS.STREAM.JOIN), async ({ streamId }, callback) => {
     try {
       const streamRoom = streams[streamId];
       if (!streamRoom) return callback({ error: 'Stream is not live yet' });
@@ -250,7 +250,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on('disconnect', async () => {
+  socket.on((SOCKET_EVENTS.STREAM.ENDED), async () => {
     for (const streamId in streams) {
       if (streams[streamId].hostSocketId === socket.id) {
         await handleCloseStream(streamId, io);

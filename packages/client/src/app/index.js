@@ -2,18 +2,19 @@ import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import LoginScreen from '../screens/LoginScreen';
 import ShopScreen from '../screens/ShopScreen';
-import GameScreen from '../screens/GameScreen';
+import GameScreen from './game_screen';
+import { useDispatch } from 'react-redux';
+import { initGameSession } from '../store/slices/gameStreamSlice'; 
+import HostTestScreen from './host_test'; 
 
 export default function Page() {
   const [user, setUser] = useState(null);
-  const [currentScreen, setCurrentScreen] = useState('HOME'); // ניהול המסך הנוכחי
-
-  // 1. הגנה: אם לא מחובר, תמיד מציגים לוגין
+  const [currentScreen, setCurrentScreen] = useState('HOME');
+  const dispatch = useDispatch(); 
   if (!user) {
     return <LoginScreen onLoginSuccess={(data) => setUser(data)} />;
   }
 
-  // 2. ניווט למסך חנות/יתרות
   if (currentScreen === 'SHOP') {
     return (
       <View style={{ flex: 1 }}>
@@ -23,6 +24,13 @@ export default function Page() {
         >
           <Text style={styles.backText}>⬅️ חזרה לבית</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity 
+  style={[styles.menuBtn, {backgroundColor: 'red'}]} 
+  onPress={() => setCurrentScreen('HOST_TEST')}
+>
+  <Text style={styles.btnText}>🧪 טסט מארח</Text>
+</TouchableOpacity>
         <ShopScreen userId={user.id} onLogout={() => setUser(null)} />
       </View>
     );
@@ -38,21 +46,53 @@ export default function Page() {
         >
           <Text style={styles.backText}>⬅️ חזרה לבית</Text>
         </TouchableOpacity>
-        <GameScreen gameId="8b796ee0-179d-4328-a184-2be8205eaf63" />
+        <GameScreen />
       </View>
     );
   }
-
-  // 4. מסך הבית (תפריט ראשי)
+if (currentScreen === 'HOST_TEST') {
+  return (
+    <View style={{ flex: 1 }}>
+      <TouchableOpacity
+        style={styles.backBtn}
+        onPress={() => setCurrentScreen('HOME')}
+      >
+        <Text style={styles.backText}>⬅️ חזרה לבית</Text>
+      </TouchableOpacity>
+      <HostTestScreen />
+    </View>
+  );
+}
+  
   return (
     <View style={styles.container}>
       <Text style={styles.welcome}>שלום, {user.username} 👋</Text>
 
+      {/* כפתור כניסה למשחק כשחקן */}
       <TouchableOpacity
         style={styles.menuBtn}
-        onPress={() => setCurrentScreen('GAME')}
+        onPress={() => {
+           {/*1. מעדכנים את הרידקס בפרטי המשחק*/}
+          dispatch(initGameSession({ 
+            gameId: "8b796ee0-179d-4328-a184-2be8205eaf63", 
+            role: 'PLAYER' 
+          }));
+         {/* 2. עוברים למסך המשחק} */}
+          setCurrentScreen('GAME');
+        }}
       >
-        <Text style={styles.btnText}>🎮 כניסה למשחק פעיל</Text>
+        <Text style={styles.btnText}>🎮 כניסה למשחק פעיל (PLAYER)</Text>
+      </TouchableOpacity>
+
+      {/* כפתור טסט מארח - הוספתי כאן לנוחות במקום בתוך SHOP */}
+      <TouchableOpacity 
+        style={[styles.menuBtn, {backgroundColor: '#ff4757'}]} 
+        onPress={() => {
+          dispatch(initGameSession({ role: 'HOST' }));
+          setCurrentScreen('HOST_TEST');
+        }}
+      >
+        <Text style={styles.btnText}>🧪 טסט מארח (HOST)</Text>
       </TouchableOpacity>
 
       <TouchableOpacity

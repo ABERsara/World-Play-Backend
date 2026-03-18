@@ -13,6 +13,9 @@ const gameService = {
     // בדיקה שהמארח פנוי
     await gameRules.validateHostIsAvailable(userId);
 
+    // ביטול משחקים ישנים של המארח (שלא הסתיימו כראוי)
+    await this.cancelOldGames(userId);
+
     // --- טרנזקציה: יצירת סטרים + משחק + משתתף במכה אחת ---
     return await prisma.$transaction(async (tx) => {
       // 1. יצירת סטרים אוטומטית (מוסתר מהמשתמש)
@@ -114,6 +117,28 @@ const gameService = {
       where: { id: gameId },
       data: dataToUpdate,
     });
+  },
+
+  // ביטול משחקים ישנים של מארח
+  async cancelOldGames(userId) {
+    // מבטל משחקים שהמארח יצר אבל לא התחילו (WAITING)
+    const oldGames = await prisma.game.findMany({
+      where: {
+        hostId: userId,
+        status: 'WAITING',
+        createdAt: {
+          lt: new Date(Date.now() - 24 * 60 * 60 * 1000), // משחקים ישנים מ-24 שעות
+        },
+      },
+    });
+
+    for (const game of oldGames) {
+      await prisma.game.update({
+        where: { id: game.id },
+        data: { status: 'FINISHED' },
+      });
+      console.log(`Cancelled old game: ${game.title} (${game.id})`);
+    }
   },
 };
 

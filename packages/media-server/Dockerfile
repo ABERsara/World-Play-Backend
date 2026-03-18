@@ -11,6 +11,7 @@ WORKDIR /usr/src/app
 # 1. העתקת קבצי הגדרות
 COPY package.json ./
 COPY packages/media-server/package*.json ./packages/media-server/
+COPY packages/shared/ ./packages/shared/
 COPY packages/server/prisma ./packages/server/prisma
 
 # 2. התקנה

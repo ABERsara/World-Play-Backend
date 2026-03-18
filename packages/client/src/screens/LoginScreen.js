@@ -7,12 +7,15 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Button
 } from 'react-native';
-import PropTypes from 'prop-types'; //
+import { useRouter } from 'expo-router'; 
+import PropTypes from 'prop-types';
 import { authService } from '../services/auth.service';
 import { connectSocket } from '../services/socket.service';
 
 const LoginScreen = ({ onLoginSuccess }) => {
+  const router = useRouter(); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,19 +27,16 @@ const LoginScreen = ({ onLoginSuccess }) => {
     }
 
     setLoading(true);
-
     try {
       const data = await authService.login(email, password);
-
       await connectSocket();
-      console.log('🔌 Socket connected via connectSocket function');
       onLoginSuccess({
         id: data.user.id,
         email: data.user.email,
         username: data.user.username || data.user.email,
       });
     } catch (error) {
-      Alert.alert('שגיאת התחברות', error.message || 'אימייל או סיסמה שגויים');
+      Alert.alert('שגיאת התחברות', error.message || 'פרטים שגויים');
     } finally {
       setLoading(false);
     }
@@ -53,7 +53,6 @@ const LoginScreen = ({ onLoginSuccess }) => {
         placeholderTextColor="#888"
         value={email}
         onChangeText={setEmail}
-        keyboardType="email-address"
         autoCapitalize="none"
       />
 
@@ -71,57 +70,25 @@ const LoginScreen = ({ onLoginSuccess }) => {
         onPress={handleLogin}
         disabled={loading}
       >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.loginText}>כניסה</Text>
-        )}
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginText}>כניסה</Text>}
       </TouchableOpacity>
+
+      
+
     </View>
   );
 };
 
-// הגדרת ולידציה ל-Props
 LoginScreen.propTypes = {
   onLoginSuccess: PropTypes.func.isRequired,
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 20,
-    backgroundColor: '#1a1a1a',
-  },
-  title: {
-    fontSize: 36,
-    textAlign: 'center',
-    color: '#ffa502',
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 24,
-    textAlign: 'center',
-    color: '#fff',
-    marginBottom: 30,
-  },
-  input: {
-    backgroundColor: '#2f3542',
-    color: '#fff',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-    fontSize: 16,
-    textAlign: 'right',
-  },
-  loginBtn: {
-    backgroundColor: '#ffa502',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
+  container: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#1a1a1a' },
+  title: { fontSize: 36, textAlign: 'center', color: '#ffa502', fontWeight: 'bold', marginBottom: 10 },
+  subtitle: { fontSize: 24, textAlign: 'center', color: '#fff', marginBottom: 30 },
+  input: { backgroundColor: '#2f3542', color: '#fff', padding: 15, borderRadius: 8, marginBottom: 15, textAlign: 'right' },
+  loginBtn: { backgroundColor: '#ffa502', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   loginBtnDisabled: { opacity: 0.6 },
   loginText: { color: '#000', fontWeight: 'bold', fontSize: 18 },
 });

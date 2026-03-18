@@ -1,122 +1,93 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Button, StyleSheet, SafeAreaView } from 'react-native';
+import  { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+// import { RTCView } from 'react-native-webrtc';
 import { socket, emitPromise } from '../services/socket.service';
 import { MediasoupManager } from '../services/MediasoupManager';
 
 export default function BroadcastScreen() {
-  const [stream, setStream] = useState(null);
-  const [status, setStatus] = useState('מוכן לשידור');
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null); // למנחה השני
   const [isLive, setIsLive] = useState(false);
-  const [currentStreamId, setCurrentStreamId] = useState(null); // הוספנו סטייט ל-ID מהשרת
-  const videoRef = useRef(null);
+  const [status, setStatus] = useState('מחובר למערכת');
 
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
-  }, [stream]);
+  // --- פונקציות לוגיקה קטנות ---
 
-  // עצירת שידור מתוקנת
-  const stopStream = async () => {
+  const initMedia = async () => {
     try {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-
-      // משתמשים ב-ID שקיבלנו מהשרת בזמן היצירה
-      if (currentStreamId) {
-        socket.emit('stream:stop_broadcast', { streamId: currentStreamId });
-      }
-
-      setStream(null);
-      setIsLive(false);
-      setCurrentStreamId(null);
-      setStatus('השידור הופסק');
-      console.log('🔴 השידור הופסק בהצלחה');
-    } catch (err) {
-      console.error('שגיאה בעצירת השידור:', err);
-    }
+      setStatus('מבקש גישה למצלמה...');
+      // const stream = await MediasoupManager.getLocalStream();
+      const stream = null; // Mock stream for testing
+      setLocalStream(stream);
+      return stream;
+    } catch (e) { setStatus('שגיאת מצלמה'); throw e; }
   };
 
-  const startStream = async () => {
+  const startBroadcast = async () => {
     try {
-      setStatus('מאתחל משחק...');
+      const stream = await initMedia();
+      setStatus('מתחבר לשרת המדיה...');
 
-      // 1. עדכון שרת האפליקציה שהמשחק מתחיל (ACTIVE)
-      // זה יעדכן את ה-DB שהסטטוס הוא ACTIVE
-      const gameData = await emitPromise('stream:init_broadcast', {
-        title: 'משחק חדש',
-      });
-      const streamIdFromServer = gameData.streamId;
-      setCurrentStreamId(streamIdFromServer);
+      // 1. אתחול מול ה-Backend
+      const { streamId } = await emitPromise('stream:init_broadcast', { title: 'שידור מנחים' });
+      const { rtpCapabilities } = await emitPromise('stream:create_room', { streamId });
+      
+      // 2. אתחול Mediasoup
+      // await MediasoupManager.initDevice(rtpCapabilities);
+      // const transport = await MediasoupManager.createTransport(socket, 'send', streamId);
 
-      // 2. גישה למצלמה
-      const media = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      setStream(media);
-
-      // 3. התחברות לשרת המדיה (Socket המדיה)
-      const roomData = await emitPromise('stream:create_room', {
-        streamId: streamIdFromServer,
-      });
-      await MediasoupManager.initDevice(roomData.rtpCapabilities);
-
-      // 4. יצירת טרנספורט שליחה
-      const transport = await MediasoupManager.createTransport(
-        socket,
-        'send',
-        streamIdFromServer
-      );
-
-      // 5. שליחת הוידאו - כאן קורה הקסם!
-      // ברגע שזה נשלח, ה-Media Server יזהה שאתה HOST/PLAYER ויפעיל FFmpeg
-      await transport.produce({
-        track: media.getVideoTracks()[0],
-        appData: { role: 'HOST' },
-      });
-      await transport.produce({
-        track: media.getAudioTracks()[0],
-        appData: { role: 'HOST' },
-      });
+      // 3. הפקת וידאו (שים לב ל-role: PRESENTER כדי שלא יוקלט!)
+      // await transport.produce({ 
+      //   track: stream.getVideoTracks()[0], 
+      //   appData: { role: 'MODERATOR' } 
+      // });
 
       setIsLive(true);
-      setStatus('LIVE 🔴 - הצופים רואים אותך בפיד');
+      setStatus('שידור חי (לא מוקלט) - WebRTC Disabled');
     } catch (err) {
-      console.error('Stream Error:', err);
-      setStatus('שגיאה: ' + err.message);
+      console.error(err);
+      setStatus('שגיאה בחיבור');
     }
   };
+
+  // --- רכיבי תצוגה (UI) ---
+
+  const VideoSlot = ({ stream, label, isRemote }) => (
+    <View style={[styles.videoBox, isRemote && styles.remoteBox]}>
+      {stream ? (
+        // <RTCView 
+        //   streamURL={stream.toURL()} 
+        //   style={styles.rtc} 
+        //   objectFit="cover" 
+        //   mirror={!isRemote} 
+        // />
+        <Text style={styles.placeholderText}>WebRTC Disabled</Text>
+      ) : (
+        <Text style={styles.placeholderText}>{label}</Text>
+      )}
+      <View style={styles.badge}><Text style={styles.badgeText}>{label}</Text></View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Broadcast Studio</Text>
         <Text style={styles.statusText}>{status}</Text>
       </View>
 
-      <View style={styles.videoContainer}>
-        {stream ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            style={styles.webVideo}
-          />
-        ) : (
-          <View style={styles.placeholder}>
-            <Text style={{ color: '#666' }}>המצלמה כבויה - לחצי על התחל</Text>
-          </View>
-        )}
+      <View style={styles.splitGrid}>
+        <VideoSlot stream={localStream} label="את/ה (מנחה 1)" />
+        <VideoSlot stream={remoteStream} label="מנחה 2 (ממתין...)" isRemote />
       </View>
 
-      <View style={styles.footer}>
+      <View style={styles.controls}>
         {!isLive ? (
-          <Button title="התחל שידור חי" onPress={startStream} color="#ff4757" />
+          <TouchableOpacity style={styles.btnStart} onPress={startBroadcast}>
+            <Text style={styles.btnText}>התחל שידור מנחים</Text>
+          </TouchableOpacity>
         ) : (
-          <Button title="הפסק שידור" onPress={stopStream} color="#2f3542" />
+          <TouchableOpacity style={styles.btnStop} onPress={() => {/* לוגיקת עצירה */}}>
+            <Text style={styles.btnText}>עצור שידור</Text>
+          </TouchableOpacity>
         )}
       </View>
     </SafeAreaView>
@@ -124,25 +95,18 @@ export default function BroadcastScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1a1a' },
-  header: { padding: 20, alignItems: 'center' },
-  title: { fontSize: 22, color: '#fff', fontWeight: 'bold' },
-  statusText: { color: '#ffa502', marginTop: 5 },
-  videoContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    margin: 10,
-    borderRadius: 10,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  webVideo: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    transform: 'scaleX(-1)',
-  },
-  placeholder: { alignItems: 'center' },
-  footer: { padding: 20 },
+  container: { flex: 1, backgroundColor: '#000' },
+  header: { height: 50, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a1a' },
+  statusText: { color: '#00ff00', fontWeight: 'bold' },
+  splitGrid: { flex: 1, flexDirection: 'column' }, // אחד מעל השני (מתאים לנייד)
+  videoBox: { flex: 1, backgroundColor: '#222', justifyContent: 'center', alignItems: 'center', borderBottomWidth: 2, borderColor: '#000' },
+  remoteBox: { backgroundColor: '#181818' },
+  rtc: { width: '100%', height: '100%' },
+  placeholderText: { color: '#444' },
+  badge: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', padding: 5, borderRadius: 4 },
+  badgeText: { color: '#fff', fontSize: 12 },
+  controls: { padding: 20, backgroundColor: '#1a1a1a' },
+  btnStart: { backgroundColor: '#ff4757', padding: 15, borderRadius: 10, alignItems: 'center' },
+  btnStop: { backgroundColor: '#2f3542', padding: 15, borderRadius: 10, alignItems: 'center' },
+  btnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' }
 });
