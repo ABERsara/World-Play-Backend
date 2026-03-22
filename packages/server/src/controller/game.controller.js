@@ -129,6 +129,17 @@ const gameController = {
       res.status(500).json({ error: 'שגיאה בהצטרפות למשחק' });
     }
   },
+
+  async getFeed(req, res) {
+    try {
+      const userId = req.user.id;
+      const feed = await gameService.getFollowedFeed(userId);
+      res.status(200).json({ success: true, data: feed });
+    } catch (error) {
+      console.error('Feed Error:', error);
+      res.status(500).json({ error: 'שגיאה בטעינת הפיד' });
+    }
+  },
 };
 
 export default gameController;

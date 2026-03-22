@@ -1,72 +1,92 @@
-// services/follow.service.js
 import { PrismaClient } from '@prisma/client';
-import * as gameRules from './validation.service.js';
+import inboxService from './inbox.service.js'; // ודאי שהנתיב נכון
 
 const prisma = new PrismaClient();
 
 const followService = {
   /**
-   * יצירת מעקב חדש
+   * יצירת מעקב חדש עם עדכון מונים והתראה
    */
   async followUser(followerId, followingId) {
-    // 1. בדיקה שזה לא אותו משתמש (אי אפשר לעקוב אחרי עצמי)
-    if (followerId === followingId) {
-      throw new Error('You cannot follow yourself');
-    }
+    if (followerId === followingId)
+      throw new Error('אינך יכול לעקוב אחרי עצמך');
 
-    // 2. ולידציה שהמשתמשים קיימים
-    await Promise.all([
-      gameRules.ensureUserExists(followerId),
-      gameRules.ensureUserExists(followingId),
-    ]);
+    return await prisma.$transaction(async (tx) => {
+      // 1. בדיקה אם כבר קיים מעקב
+      const existingFollow = await tx.follow.findUnique({
+        where: { followerId_followingId: { followerId, followingId } },
+      });
 
-    // 3. יצירת המעקב (שימוש ב-upsert כדי למנוע כפילויות אם המשתמש לוחץ פעמיים)
-    const follow = await prisma.follow.upsert({
-      where: {
-        followerId_followingId: {
-          followerId,
-          followingId,
-        },
-      },
-      update: {}, // אם כבר קיים, אל תעשה כלום
-      create: {
-        followerId,
-        followingId,
-      },
+      if (existingFollow) return existingFollow;
+
+      // 2. יצירת רשומת המעקב
+      const follow = await tx.follow.create({
+        data: { followerId, followingId },
+        include: { follower: { select: { username: true } } },
+      });
+
+      // 3. עדכון מונים (Atomic Increment)
+      await tx.user.update({
+        where: { id: followingId },
+        data: { followersCount: { increment: 1 } },
+      });
+
+      await tx.user.update({
+        where: { id: followerId },
+        data: { followingCount: { increment: 1 } },
+      });
+
+      // 4. יצירת התראה באינבוקס למשתמש שקיבל עוקב
+      try {
+        await inboxService.createNotification(followingId, {
+          type: 'FOLLOW',
+          title: 'עוקב חדש 👤',
+          content: `${follow.follower.username} התחיל לעקוב אחריך`,
+          metadata: { followerId },
+        });
+      } catch (err) {
+        console.error('⚠️ שגיאה ביצירת התראה:', err.message);
+      }
+
+      return follow;
     });
-
-    return follow;
   },
+
+  /**
+   * הסרת מעקב עם עדכון מונים
+   */
+  async unfollowUser(followerId, followingId) {
+    return await prisma.$transaction(async (tx) => {
+      const deleteResult = await tx.follow.deleteMany({
+        where: { followerId, followingId },
+      });
+
+      if (deleteResult.count > 0) {
+        await tx.user.update({
+          where: { id: followingId },
+          data: { followersCount: { decrement: 1 } },
+        });
+
+        await tx.user.update({
+          where: { id: followerId },
+          data: { followingCount: { decrement: 1 } },
+        });
+      }
+      return deleteResult;
+    });
+  },
+
   async getMyFollowers(userId) {
-    // שליפת כל הרשומות שבהן אני ה-followingId
     const followers = await prisma.follow.findMany({
       where: { followingId: userId },
       include: {
         follower: {
-          select: {
-            id: true,
-            username: true,
-            isActive: true, // כדי לדעת אם העוקב פעיל
-          },
+          select: { id: true, username: true, isActive: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
-
-    // החזרת רשימת המשתמשים בלבד בצורה נקייה
     return followers.map((f) => f.follower);
-  },
-
-  /**
-   * הסרת מעקב (Unfollow)
-   */
-  async unfollowUser(followerId, followingId) {
-    return await prisma.follow.deleteMany({
-      where: {
-        followerId,
-        followingId,
-      },
-    });
   },
 };
 

@@ -115,6 +115,30 @@ const gameService = {
       data: dataToUpdate,
     });
   },
+  async getFollowedFeed(userId) {
+    // 1. מוצאים את כל ה-ID של האנשים שהמשתמש עוקב אחריהם
+    const following = await prisma.follow.findMany({
+      where: { followerId: userId },
+      select: { followingId: true },
+    });
+
+    const followingIds = following.map((f) => f.followingId);
+
+    // 2. שולפים משחקים שהמארח שלהם נמצא ברשימה הזו
+    return await prisma.game.findMany({
+      where: {
+        hostId: { in: followingIds },
+        status: { in: ['WAITING', 'ACTIVE'] }, // רק משחקים שרלוונטיים עכשיו
+      },
+      include: {
+        host: {
+          select: { username: true, followersCount: true },
+        },
+        stream: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
 };
 
 export default gameService;

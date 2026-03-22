@@ -17,4 +17,7 @@ router.put('/:id/status', gameController.updateStatus);
 // POST /api/games/{GAME_ID}/join
 router.post('/:id/join', gameController.joinGame);
 
+// GET /api/games/feed
+router.get('/feed', authenticateToken, gameController.getFeed);
+
 export default router;

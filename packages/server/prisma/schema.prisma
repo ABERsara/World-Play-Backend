@@ -48,6 +48,9 @@ model User {
   hostLogs         ViewLog[]         @relation("HostLogs")
   viewLogs         ViewLog[]         @relation("UserLogs")
 
+  followersCount   Int               @default(0) @map("followers_count")
+  followingCount   Int               @default(0) @map("following_count")
+
   @@map("users")
 }
 
