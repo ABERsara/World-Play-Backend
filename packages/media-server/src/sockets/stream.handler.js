@@ -37,54 +37,60 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on((SOCKET_EVENTS.STREAM.CREATE_ROOM), async ({ streamId }, callback) => {
-    try {
-      if (!streams[streamId]) {
-        const worker = msService.getWorker();
-        const router = await msService.createRouter(worker);
-        streams[streamId] = {
-          router,
-          hostSocketId: socket.id,
-          hostUserId: user ? user.id : 'dev-host',
-          transports: new Map(), // הוספנו מפה לניהול טרנספורטים בתוך החדר
-        };
-      }
-      callback({ rtpCapabilities: streams[streamId].router.rtpCapabilities });
-    } catch (error) {
-      callback({ error: error.message });
-    }
-  });
-
-  socket.on((SOCKET_EVENTS.STREAM.CREATE_TRANSPORT), async ({ streamId }, callback) => {
-    try {
-      const streamRoom = streams[streamId];
-      if (!streamRoom) return callback({ error: 'Stream Room not found' });
-      const transport = await msService.createWebRtcTransport(
-        streamRoom.router
-      );
-      transport.on('dtlsstatechange', (dtlsState) => {
-        if (dtlsState === 'closed') {
-          transport.close();
-          delete transports[transport.id];
-          streamRoom.transports.delete(transport.id);
+  socket.on(
+    SOCKET_EVENTS.STREAM.CREATE_ROOM,
+    async ({ streamId }, callback) => {
+      try {
+        if (!streams[streamId]) {
+          const worker = msService.getWorker();
+          const router = await msService.createRouter(worker);
+          streams[streamId] = {
+            router,
+            hostSocketId: socket.id,
+            hostUserId: user ? user.id : 'dev-host',
+            transports: new Map(), // הוספנו מפה לניהול טרנספורטים בתוך החדר
+          };
         }
-      });
-      transports[transport.id] = transport;
-      streamRoom.transports.set(transport.id, transport); // שמירה בחדר עבור ה-Consume
-
-      callback({
-        id: transport.id,
-        iceParameters: transport.iceParameters,
-        iceCandidates: transport.iceCandidates,
-        dtlsParameters: transport.dtlsParameters,
-      });
-    } catch (error) {
-      callback({ error: error.message });
+        callback({ rtpCapabilities: streams[streamId].router.rtpCapabilities });
+      } catch (error) {
+        callback({ error: error.message });
+      }
     }
-  });
+  );
 
   socket.on(
-    (SOCKET_EVENTS.STREAM.CONNECT_TRANSPORT),
+    SOCKET_EVENTS.STREAM.CREATE_TRANSPORT,
+    async ({ streamId }, callback) => {
+      try {
+        const streamRoom = streams[streamId];
+        if (!streamRoom) return callback({ error: 'Stream Room not found' });
+        const transport = await msService.createWebRtcTransport(
+          streamRoom.router
+        );
+        transport.on('dtlsstatechange', (dtlsState) => {
+          if (dtlsState === 'closed') {
+            transport.close();
+            delete transports[transport.id];
+            streamRoom.transports.delete(transport.id);
+          }
+        });
+        transports[transport.id] = transport;
+        streamRoom.transports.set(transport.id, transport); // שמירה בחדר עבור ה-Consume
+
+        callback({
+          id: transport.id,
+          iceParameters: transport.iceParameters,
+          iceCandidates: transport.iceCandidates,
+          dtlsParameters: transport.dtlsParameters,
+        });
+      } catch (error) {
+        callback({ error: error.message });
+      }
+    }
+  );
+
+  socket.on(
+    SOCKET_EVENTS.STREAM.CONNECT_TRANSPORT,
     async ({ transportId, dtlsParameters }, callback) => {
       try {
         const transport = transports[transportId];
@@ -97,7 +103,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   );
 
-  socket.on((SOCKET_EVENTS.STREAM.PRODUCE), async (data, callback) => {
+  socket.on(SOCKET_EVENTS.STREAM.PRODUCE, async (data, callback) => {
     try {
       let actualData = data;
 
@@ -174,18 +180,30 @@ export const registerStreamHandlers = (io, socket) => {
       const role = await validateParticipantRole(streamId, socket.user.id);
 
       if (kind === 'video' && (role === 'HOST' || role === 'PLAYER')) {
-        console.log(`🚀 [STREAM B] Launching FFmpeg Pipeline...`);
+        console.log(
+          `🚀 [STREAM B] Video producer detected. Preparing FFmpeg...`
+        );
 
         await prisma.stream.update({
           where: { id: streamId },
           data: { status: 'LIVE', startTime: new Date() },
         });
 
-        await StreamService.startRecording(
-          streamId,
-          streamRoom.router,
-          producer
-        );
+        // הוספת השהיה של 1.5 שניות לפני תחילת ההקלטה
+        setTimeout(async () => {
+          try {
+            console.log(
+              `🎬 [FFMPEG] Starting pipeline now for stream: ${streamId}`
+            );
+            await StreamService.startRecording(
+              streamId,
+              streamRoom.router,
+              producer // כאן עובר הפרודיוסר של הוידאו
+            );
+          } catch (err) {
+            console.error('❌ FFmpeg Start Error:', err);
+          }
+        }, 1500);
       }
 
       if (typeof callback === 'function') callback({ id: producer.id });
@@ -196,7 +214,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on((SOCKET_EVENTS.STREAM.CONSUME), async (data, callback) => {
+  socket.on(SOCKET_EVENTS.STREAM.CONSUME, async (data, callback) => {
     try {
       const actualData =
         typeof data === 'string' ? JSON.parse(data.trim()) : data;
@@ -236,7 +254,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on((SOCKET_EVENTS.STREAM.JOIN), async ({ streamId }, callback) => {
+  socket.on(SOCKET_EVENTS.STREAM.JOIN, async ({ streamId }, callback) => {
     try {
       const streamRoom = streams[streamId];
       if (!streamRoom) return callback({ error: 'Stream is not live yet' });
@@ -250,7 +268,7 @@ export const registerStreamHandlers = (io, socket) => {
     }
   });
 
-  socket.on((SOCKET_EVENTS.STREAM.ENDED), async () => {
+  socket.on(SOCKET_EVENTS.STREAM.ENDED, async () => {
     for (const streamId in streams) {
       if (streams[streamId].hostSocketId === socket.id) {
         await handleCloseStream(streamId, io);

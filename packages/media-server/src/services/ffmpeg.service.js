@@ -6,83 +6,108 @@ export class FFmpegService {
   constructor(gameId) {
     this.gameId = gameId;
     this.process = null;
-    this.outputDir = path.join(process.cwd(), 'public', 'streams', gameId);
+    // ודאי שהנתיב מוחלט וקיים
+    this.outputDir = path.resolve(process.cwd(), 'public', 'streams', gameId);
 
     if (!fs.existsSync(this.outputDir)) {
       fs.mkdirSync(this.outputDir, { recursive: true });
+      console.log(`📁 Created directory: ${this.outputDir}`);
     }
   }
 
-  generateSDP(videoTransport, audioTransport, videoPayloadType, audioPayloadType) {
-    return `v=0
-o=- 0 0 IN IP4 127.0.0.1
-s=Mediasoup Stream B
-c=IN IP4 127.0.0.1
+  generateSDP(videoTransport, audioTransport) {
+    const videoPort = videoTransport.tuple.localPort;
+    const audioPort = audioTransport ? audioTransport.tuple.localPort : null;
+    const ip = process.env.ANNOUNCED_IP || '127.0.0.1';
+
+    let sdp = `v=0
+o=- 0 0 IN IP4 ${ip}
+s=Mediasoup
+c=IN IP4 ${ip}
 t=0 0
-m=video ${videoTransport.tuple.localPort} RTP/AVP ${videoPayloadType}
-a=rtpmap:${videoPayloadType} H264/90000
-a=fmtp:${videoPayloadType} packetization-mode=1;profile-level-id=42e01f;level-asymmetry-allowed=1
-m=audio ${audioTransport.tuple.localPort} RTP/AVP ${audioPayloadType}
-a=rtpmap:${audioPayloadType} opus/48000/2
+m=video ${videoPort} RTP/AVP 101
+a=rtpmap:101 VP8/90000
 `;
+
+    if (audioPort) {
+      sdp += `m=audio ${audioPort} RTP/AVP 111
+a=rtpmap:111 opus/48000/2
+`;
+    }
+
+    return sdp;
   }
 
- async start(sdpString) { // הוספתי async כי יש לך await בפנים
-    console.log("!!!!! I AM RUNNING THE NEW CODE VERSION !!!!!");
+  async start(sdpString) {
+    console.log('!!!!! I AM RUNNING THE NEW CODE VERSION !!!!!');
     const sdpPath = path.join(this.outputDir, 'input.sdp');
     fs.writeFileSync(sdpPath, sdpString);
 
-    // המתנה קלה כדי שה-Packets יתחילו לזרום
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // המתנה של 1.5 שניות כדי לוודא שה-Producer ב-Mediasoup התחיל לשלוח דאטה
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     const args = [
-        '-loglevel', 'info',
-        '-protocol_whitelist', 'pipe,udp,rtp,file',
-        '-analyzeduration', '10000000', // הגדלנו ל-10 שניות ניתוח
-        '-probesize', '10000000',
-        '-f', 'sdp',
-        '-i', sdpPath,
-
-        // המיפוי הגמיש - לא קורס אם חסר סטרים
-        '-map', '0:v:0?', 
-        '-map', '0:a:0?',
-
-        // הגדרות וידאו (קידוד מחדש מבטיח תאימות ל-HLS)
-        '-vcodec', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        '-preset', 'ultrafast', // הכי מהיר שיש
-        '-tune', 'zerolatency',
-        '-g', '50',             // Keyframe כל 50 פריימים (חשוב ל-HLS)
-        
-        // הגדרות אודיו
-        '-acodec', 'aac',
-        '-ar', '44100',
-        '-ac', '2',
-
-        // הגדרות HLS
-        '-f', 'hls',
-        '-hls_time', '2',       // מקטעים של 2 שניות לדיליי נמוך
-        '-hls_list_size', '6',  // שומר רק את ה-6 האחרונים
-        '-hls_flags', 'delete_segments+append_list+independent_segments',
-        '-hls_segment_type', 'mpegts',
-        path.join(this.outputDir, 'index.m3u8'),
+      '-loglevel',
+      'info', // שיניתי מ-debug ל-info כדי לא להציף, frame עדיין יופיע
+      '-protocol_whitelist',
+      'rtp,udp,file,crypto,data,pipe',
+      '-re',
+      '-analyzeduration',
+      '5000000',
+      '-probesize',
+      '5000000',
+      '-f',
+      'sdp',
+      '-i',
+      sdpPath,
+      '-fflags',
+      '+genpts+discardcorrupt',
+      '-map',
+      '0:v:0',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      '-tune',
+      'zerolatency',
+      '-pix_fmt',
+      'yuv420p',
+      '-f',
+      'hls',
+      '-hls_time',
+      '2',
+      '-hls_list_size',
+      '3',
+      '-hls_flags',
+      'delete_segments',
+      path.join(this.outputDir, 'index.m3u8'),
     ];
 
     console.log(`🚀 [FFMPEG] Starting with args for ${this.gameId}`);
     this.process = spawn('ffmpeg', args);
 
     this.process.stderr.on('data', (data) => {
-        const message = data.toString();
-        // נחפש אינדיקציה שהסטרים התחיל לעבוד
-        if (message.includes('frame=')) {
-            console.log(`✅ [FFMPEG PROGRESS]: ${message.split('\n')[0].trim()}`);
-        } else if (message.includes('Error')) {
-            console.error(`❌ [FFMPEG ERROR]: ${message}`);
+      const message = data.toString();
+
+      if (message.includes('frame=')) {
+        const progress = message
+          .split('\n')
+          .find((line) => line.includes('frame='));
+        if (progress) {
+          console.log(`✅ [FFMPEG PROGRESS]: ${progress.trim()}`);
         }
+      }
+
+      if (
+        message.toLowerCase().includes('error') ||
+        message.includes('Invalid argument')
+      ) {
+        console.error(`❌ [FFMPEG ERROR]: ${message.trim()}`);
+      }
     });
 
     this.process.on('close', (code) => {
-        console.log(`[FFMPEG PROCESS] Exited with code ${code}`);
+      console.log(`[FFMPEG PROCESS] Exited with code ${code}`);
     });
-}
+  }
 }

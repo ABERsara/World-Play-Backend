@@ -14,6 +14,9 @@ COPY packages/media-server/package*.json ./packages/media-server/
 COPY packages/shared/ ./packages/shared/
 COPY packages/server/prisma ./packages/server/prisma
 
+# יצירת תיקיית הסטרימינג ומתן הרשאות מלאות
+RUN mkdir -p public/streams && chmod -R 777 public/streams
+
 # 2. התקנה
 ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 RUN npm install
@@ -25,6 +28,10 @@ RUN npx prisma generate --schema=./packages/server/prisma/schema.prisma
 COPY packages/media-server/ ./packages/media-server/
 
 WORKDIR /usr/src/app/packages/media-server
+
+# פתיחת טווח הפורטים ל-UDP (אופציונלי ב-Dockerfile, חובה ב-Compose)
+EXPOSE 10000-10010/udp
+EXPOSE 11000-11020/udp
 
 EXPOSE 8000
 CMD ["npm", "start"]

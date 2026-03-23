@@ -61,9 +61,11 @@ app.use('/api/economy', economyRoutes);
 // --- Functions ---
 async function checkMediaServer() {
   let connected = false;
+  const mediaUrl = process.env.MEDIA_SERVER_INTERNAL_URL;
+
   while (!connected) {
     try {
-      const response = await axios.get('http://media-server:8000/');
+      const response = await axios.get(mediaUrl); // פנייה לכתובת הדינמית
       console.log(
         '[BACKEND-TO-MEDIA] Connection successful:',
         response.data.status
@@ -71,10 +73,10 @@ async function checkMediaServer() {
       connected = true;
     } catch (error) {
       console.log(
-        '[BACKEND-TO-MEDIA] Waiting for media server...',
+        `[BACKEND-TO-MEDIA] Waiting for media server at ${mediaUrl}...`,
         error.message
       );
-      await new Promise((resolve) => setTimeout(resolve, 3000)); // מחכה 3 שניות לפני ניסיון חוזר
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
 }

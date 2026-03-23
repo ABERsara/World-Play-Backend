@@ -26,7 +26,8 @@ web-build/
 .expo/
 *.log
 npm-debug.log*
-
+packages/media-server/public/streams/*
+!packages/media-server/public/streams/.gitkeep
 
 # System & IDE
 .vscode/
