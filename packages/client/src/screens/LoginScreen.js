@@ -8,7 +8,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import PropTypes from 'prop-types'; //
+import PropTypes from 'prop-types';
 import { authService } from '../services/auth.service';
 import { connectSocket } from '../services/socket.service';
 
@@ -24,19 +24,16 @@ const LoginScreen = ({ onLoginSuccess }) => {
     }
 
     setLoading(true);
-
     try {
       const data = await authService.login(email, password);
-
       await connectSocket();
-      console.log('🔌 Socket connected via connectSocket function');
       onLoginSuccess({
         id: data.user.id,
         email: data.user.email,
         username: data.user.username || data.user.email,
       });
     } catch (error) {
-      Alert.alert('שגיאת התחברות', error.message || 'אימייל או סיסמה שגויים');
+      Alert.alert('שגיאת התחברות', error.message || 'פרטים שגויים');
     } finally {
       setLoading(false);
     }
@@ -53,7 +50,6 @@ const LoginScreen = ({ onLoginSuccess }) => {
         placeholderTextColor="#888"
         value={email}
         onChangeText={setEmail}
-        keyboardType="email-address"
         autoCapitalize="none"
       />
 
@@ -81,7 +77,6 @@ const LoginScreen = ({ onLoginSuccess }) => {
   );
 };
 
-// הגדרת ולידציה ל-Props
 LoginScreen.propTypes = {
   onLoginSuccess: PropTypes.func.isRequired,
 };
@@ -112,7 +107,6 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     marginBottom: 15,
-    fontSize: 16,
     textAlign: 'right',
   },
   loginBtn: {

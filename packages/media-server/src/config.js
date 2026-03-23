@@ -7,8 +7,12 @@ export const config = {
     numWorkers: Object.keys(os.cpus()).length,
 
     worker: {
-      rtcMinPort: 11000,
-      rtcMaxPort: 11100,
+      rtcMinPort: process.env.RTC_MIN_PORT
+        ? parseInt(process.env.RTC_MIN_PORT)
+        : 10000,
+      rtcMaxPort: process.env.RTC_MAX_PORT
+        ? parseInt(process.env.RTC_MAX_PORT)
+        : 10010, // צמצמנו ל-10 בשביל דוקר
       logLevel: 'warn',
       logTags: ['info', 'ice', 'dtls', 'rtp', 'srtp', 'rtcp'],
     },

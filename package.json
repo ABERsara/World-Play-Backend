@@ -22,7 +22,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"packages/**/*.{js,mjs,cjs,json,css,md}\"",
-    "prepare": "husky"
+    "prepare": "husky",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "devDependencies": {
     "eslint": "^9.39.2",
@@ -40,6 +42,10 @@
   },
   "husky": {},
   "dependencies": {
-    "prop-types": "^15.8.1"
-  }
+    "prop-types": "^15.8.1",
+    "expo": "~54.0.33",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "version": "1.0.0"
 }

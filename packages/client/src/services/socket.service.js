@@ -2,71 +2,105 @@ import { io } from 'socket.io-client';
 import { authService } from './auth.service';
 import { Platform } from 'react-native';
 
-const SOCKET_URL =
+const APP_SERVER_URL =
   Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 
-// משתנה פנימי שניתן לשינוי
-let socketInstance = null;
+let appSocketInstance = null;
+let mediaSocketInstance = null;
+let mediaSocketConnectPromise = null;
 
-export const connectSocket = async () => {
-  if (socketInstance && socketInstance.connected) return socketInstance;
+const getMediaServerUrl = () => {
+  return Platform.OS === 'android'
+    ? 'http://192.168.33.17:8000'
+    : 'http://localhost:8000';
+};
 
+export const connectAppSocket = async () => {
+  if (appSocketInstance && appSocketInstance.connected)
+    return appSocketInstance;
   const token = await authService.getToken();
-  if (!token) {
-    console.warn('No token found, cannot connect socket');
-    return null;
-  }
+  if (!token) return null;
 
-  socketInstance = io(SOCKET_URL, {
+  appSocketInstance = io(APP_SERVER_URL, {
     auth: { token },
     transports: ['polling', 'websocket'],
     reconnection: true,
   });
 
-  socketInstance.on('connect', () => {
-    console.log('✅ Socket connected:', socketInstance.id);
-  });
-
-  socketInstance.on('connect_error', (error) => {
-    console.error('❌ Socket connection error:', error.message);
-  });
-
-  return socketInstance;
+  return appSocketInstance;
 };
 
-// אקספורט של ה-instance עצמו (Getter)
-export const getSocket = () => socketInstance;
+export const connectMediaSocket = async () => {
+  if (mediaSocketInstance && mediaSocketInstance.connected)
+    return mediaSocketInstance;
+  if (mediaSocketConnectPromise) return mediaSocketConnectPromise;
+
+  mediaSocketConnectPromise = new Promise((resolve, reject) => {
+    authService
+      .getToken()
+      .then((token) => {
+        if (!token) {
+          mediaSocketConnectPromise = null;
+          return reject(new Error('No token found'));
+        }
+
+        const mediaUrl = getMediaServerUrl();
+        mediaSocketInstance = io(mediaUrl, {
+          auth: { token },
+          transports: ['websocket'],
+          reconnection: true,
+          forceNew: true,
+        });
+
+        mediaSocketInstance.on('connect', () => {
+          mediaSocketConnectPromise = null;
+          resolve(mediaSocketInstance);
+        });
+
+        mediaSocketInstance.on('connect_error', (error) => {
+          mediaSocketConnectPromise = null;
+          reject(error);
+        });
+      })
+      .catch(reject);
+  });
+
+  return mediaSocketConnectPromise;
+};
 
 export const emitPromise = (type, data) => {
   return new Promise((resolve, reject) => {
-    const initialize = async () => {
-      try {
-        const activeSocket = socketInstance || (await connectSocket());
-        if (!activeSocket || !activeSocket.connected) {
+    connectAppSocket()
+      .then((activeSocket) => {
+        if (!activeSocket || !activeSocket.connected)
           return reject(new Error('סוקט לא מחובר'));
-        }
-
         activeSocket.emit(type, data, (response) => {
-          if (response && response.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response);
-          }
+          if (response && response.error) reject(new Error(response.error));
+          else resolve(response);
         });
-      } catch (error) {
-        reject(error);
-      }
-    };
-    initialize();
+      })
+      .catch(reject);
+  });
+};
+
+export const emitMediaPromise = (type, data) => {
+  return new Promise((resolve, reject) => {
+    connectMediaSocket()
+      .then((activeSocket) => {
+        if (!activeSocket || !activeSocket.connected)
+          return reject(new Error('מדיה סוקט לא מחובר'));
+        activeSocket.emit(type, data, (response) => {
+          if (response && response.error) reject(new Error(response.error));
+          else resolve(response);
+        });
+      })
+      .catch(reject);
   });
 };
 
 export const disconnectSocket = () => {
-  if (socketInstance) {
-    socketInstance.disconnect();
-    socketInstance = null;
-  }
+  if (appSocketInstance) appSocketInstance.disconnect();
+  if (mediaSocketInstance) mediaSocketInstance.disconnect();
 };
 
-// תאימות לאחור לקוד קיים שמשתמש ב-import { socket }
-export { socketInstance as socket };
+export const socket = appSocketInstance;

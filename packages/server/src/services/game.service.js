@@ -13,6 +13,9 @@ const gameService = {
     // בדיקה שהמארח פנוי
     await gameRules.validateHostIsAvailable(userId);
 
+    // ביטול משחקים ישנים של המארח (שלא הסתיימו כראוי)
+    await this.cancelOldGames(userId);
+
     // --- טרנזקציה: יצירת סטרים + משחק + משתתף במכה אחת ---
     return await prisma.$transaction(async (tx) => {
       // 1. יצירת סטרים אוטומטית (מוסתר מהמשתמש)

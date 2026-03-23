@@ -7,67 +7,51 @@ import {
   SafeAreaView,
 } from 'react-native';
 
-// ייבוא המסכים שלך
 import LoginScreen from '../screens/LoginScreen';
 import ShopScreen from '../screens/ShopScreen';
 import GameScreen from '../screens/GameScreen';
-import InboxScreen from '../screens/InboxScreen'; // המסך החדש שבנינו
+// import InboxScreen from '../screens/InboxScreen';
 
 export default function Page() {
   const [user, setUser] = useState(null);
-  const [currentScreen, setCurrentScreen] = useState('HOME'); // ניהול הניווט
+  const [currentScreen, setCurrentScreen] = useState('HOME');
 
-  // 1. הגנה: אם המשתמש לא מחובר, מציגים תמיד את מסך הלוגין
+  // 1. הגנה: אם לא מחובר, תמיד מציגים לוגין
   if (!user) {
     return <LoginScreen onLoginSuccess={(data) => setUser(data)} />;
   }
 
-  /**
-   * פונקציה עזר ליצירת כפתור חזרה (Header)
-   */
-  const renderHeader = (title) => (
-    <View style={styles.backHeader}>
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={() => setCurrentScreen('HOME')}
-      >
-        <Text style={styles.backText}>⬅️ חזרה לבית</Text>
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
-    </View>
-  );
-
   // 2. ניווט למסך חנות/יתרות
   if (currentScreen === 'SHOP') {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
-        {renderHeader('חנות ויתרות')}
+      <View style={{ flex: 1 }}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => setCurrentScreen('HOME')}
+        >
+          <Text style={styles.backText}>⬅️ חזרה לבית</Text>
+        </TouchableOpacity>
         <ShopScreen userId={user.id} onLogout={() => setUser(null)} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   // 3. ניווט למסך משחק
   if (currentScreen === 'GAME') {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
-        {renderHeader('משחק פעיל')}
+      <View style={{ flex: 1 }}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => setCurrentScreen('HOME')}
+        >
+          <Text style={styles.backText}>⬅️ חזרה לבית</Text>
+        </TouchableOpacity>
         <GameScreen gameId="8b796ee0-179d-4328-a184-2be8205eaf63" />
-      </SafeAreaView>
+      </View>
     );
   }
 
-  // 4. ניווט למסך ה-Inbox (התראות)
-  if (currentScreen === 'INBOX') {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#030712' }}>
-        {renderHeader('דואר והתראות')}
-        <InboxScreen />
-      </SafeAreaView>
-    );
-  }
-
-  // 5. מסך הבית (תפריט ראשי)
+  // 4. מסך הבית (תפריט ראשי)
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
