@@ -39,7 +39,6 @@ a=rtpmap:111 opus/48000/2
   }
 
   async start(sdpString) {
-    console.log('!!!!! I AM RUNNING THE NEW CODE VERSION !!!!!');
     const sdpPath = path.join(this.outputDir, 'input.sdp');
     fs.writeFileSync(sdpPath, sdpString);
 
@@ -48,30 +47,30 @@ a=rtpmap:111 opus/48000/2
 
     const args = [
       '-loglevel',
-      'info', // שיניתי מ-debug ל-info כדי לא להציף, frame עדיין יופיע
+      'info',
       '-protocol_whitelist',
       'rtp,udp,file,crypto,data,pipe',
-      '-re',
-      '-analyzeduration',
-      '5000000',
-      '-probesize',
-      '5000000',
+      // 1. אופטימיזציה לקלט - מניעת הדיליי שגורם ל-Drop
+      '-fflags',
+      '+genpts+discardcorrupt+nobuffer',
+      '-flags',
+      'low_delay',
       '-f',
       'sdp',
       '-i',
       sdpPath,
-      '-fflags',
-      '+genpts+discardcorrupt',
       '-map',
       '0:v:0',
+      // 2. אופטימיזציה לקידוד - מהירות מקסימלית על חשבון איכות
       '-c:v',
       'libx264',
       '-preset',
-      'ultrafast',
+      'ultrafast', // הכי מהיר שיש
       '-tune',
-      'zerolatency',
-      '-pix_fmt',
-      'yuv420p',
+      'zerolatency', // מותאם לשידור חי
+      '-g',
+      '30', // יצירת Keyframe כל 30 פריימים (עוזר ליציבות)
+      // 3. הגדרות HLS
       '-f',
       'hls',
       '-hls_time',
