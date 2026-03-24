@@ -18,7 +18,7 @@ export class FFmpegService {
   generateSDP(videoTransport, audioTransport) {
     const videoPort = videoTransport.tuple.localPort;
     const audioPort = audioTransport ? audioTransport.tuple.localPort : null;
-    const ip = process.env.ANNOUNCED_IP || '127.0.0.1';
+    const ip = '127.0.0.1'; // בתוך הדוקר עובדים עם localhost פנימי
 
     let sdp = `v=0
 o=- 0 0 IN IP4 ${ip}
@@ -27,11 +27,13 @@ c=IN IP4 ${ip}
 t=0 0
 m=video ${videoPort} RTP/AVP 101
 a=rtpmap:101 VP8/90000
+a=rtcp-mux
 `;
 
     if (audioPort) {
       sdp += `m=audio ${audioPort} RTP/AVP 111
 a=rtpmap:111 opus/48000/2
+a=rtcp-mux
 `;
     }
 
@@ -45,12 +47,13 @@ a=rtpmap:111 opus/48000/2
     // המתנה של 1.5 שניות כדי לוודא שה-Producer ב-Mediasoup התחיל לשלוח דאטה
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
+    // packages/media-server/src/services/ffmpeg.service.js
+
     const args = [
       '-loglevel',
       'info',
       '-protocol_whitelist',
       'rtp,udp,file,crypto,data,pipe',
-      // 1. אופטימיזציה לקלט - מניעת הדיליי שגורם ל-Drop
       '-fflags',
       '+genpts+discardcorrupt+nobuffer',
       '-flags',
@@ -59,18 +62,24 @@ a=rtpmap:111 opus/48000/2
       'sdp',
       '-i',
       sdpPath,
+      // הוספת מפות (Mapping): מפה 0:0 לוידאו, מפה 0:1 לאודיו
       '-map',
       '0:v:0',
-      // 2. אופטימיזציה לקידוד - מהירות מקסימלית על חשבון איכות
+      '-map',
+      '0:a:0',
       '-c:v',
       'libx264',
       '-preset',
-      'ultrafast', // הכי מהיר שיש
+      'ultrafast',
       '-tune',
-      'zerolatency', // מותאם לשידור חי
-      '-g',
-      '30', // יצירת Keyframe כל 30 פריימים (עוזר ליציבות)
-      // 3. הגדרות HLS
+      'zerolatency',
+      // קידוד אודיו ל-AAC (סטנדרט של HLS)
+      '-c:a',
+      'aac',
+      '-ar',
+      '44100', // Sample rate
+      '-ac',
+      '2', // Stereo
       '-f',
       'hls',
       '-hls_time',

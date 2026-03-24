@@ -10,9 +10,13 @@ let mediaSocketInstance = null;
 let mediaSocketConnectPromise = null;
 
 const getMediaServerUrl = () => {
-  return Platform.OS === 'android'
-    ? 'http://192.168.33.17:8000'
-    : 'http://localhost:8000';
+  // הוא יקח את הכתובת ישירות מה-ENV שהגדרת בשורש הפרויקט
+  const envUrl = process.env.EXPO_PUBLIC_MEDIA_SERVER_URL;
+
+  if (Platform.OS === 'android') {
+    return envUrl || 'http://10.0.2.2:8000';
+  }
+  return 'http://localhost:8000';
 };
 
 export const connectAppSocket = async () => {
@@ -26,7 +30,9 @@ export const connectAppSocket = async () => {
     transports: ['polling', 'websocket'],
     reconnection: true,
   });
-
+  appSocketInstance.on('connect', () =>
+    console.log('✅ App Socket connected!')
+  );
   return appSocketInstance;
 };
 
@@ -103,4 +109,7 @@ export const disconnectSocket = () => {
   if (mediaSocketInstance) mediaSocketInstance.disconnect();
 };
 
-export const socket = appSocketInstance;
+export const connectSocket = connectAppSocket;
+export const getSocket = () => appSocketInstance;
+
+export { appSocketInstance as socket };
