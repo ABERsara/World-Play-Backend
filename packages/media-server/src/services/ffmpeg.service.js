@@ -6,7 +6,6 @@ export class FFmpegService {
   constructor(gameId) {
     this.gameId = gameId;
     this.process = null;
-    // ודאי שהנתיב מוחלט וקיים
     this.outputDir = path.resolve(process.cwd(), 'public', 'streams', gameId);
 
     if (!fs.existsSync(this.outputDir)) {
@@ -47,8 +46,6 @@ a=rtcp-mux
     // המתנה של 1.5 שניות כדי לוודא שה-Producer ב-Mediasoup התחיל לשלוח דאטה
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // packages/media-server/src/services/ffmpeg.service.js
-
     const args = [
       '-loglevel',
       'info',
@@ -60,6 +57,12 @@ a=rtcp-mux
       'low_delay',
       '-f',
       'sdp',
+      '-analyzeduration',
+      '20M',
+      '-probesize',
+      '20M',
+      '-fflags',
+      '+genpts+discardcorrupt',
       '-i',
       sdpPath,
       // הוספת מפות (Mapping): מפה 0:0 לוידאו, מפה 0:1 לאודיו

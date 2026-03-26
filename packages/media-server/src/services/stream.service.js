@@ -106,6 +106,7 @@ const spawnFFmpeg = (sdpPath, streamPath, streamId, hasAudio) => {
   ffmpeg.on('error', (err) =>
     console.error(`❌ FFmpeg Error [${streamId}]:`, err.message)
   );
+
   ffmpeg.on('close', (code) => {
     console.log(`🎬 FFmpeg closed (code ${code}) for ${streamId}`);
     activeStreams.delete(streamId);
@@ -181,5 +182,26 @@ export const StreamService = {
     } catch (err) {
       console.error(`❌ StreamService error [${kind}]:`, err.message);
     }
+  },
+
+  async stopRecording(streamId) {
+    const state = activeStreams.get(streamId);
+    if (!state) return;
+
+    console.log(`🛑 Stopping stream and cleaning up: ${streamId}`);
+
+    // 1. הריגת תהליך ה-FFmpeg
+    if (state.ffmpeg) {
+      state.ffmpeg.kill('SIGINT');
+      state.ffmpeg = null;
+    }
+
+    // 2. סגירת ה-Consumers (כדי לשחרר משאבים ב-Mediasoup)
+    if (state.videoConsumer?.consumer) state.videoConsumer.consumer.close();
+    if (state.audioConsumer?.consumer) state.audioConsumer.consumer.close();
+
+    // 3. מחיקה מהרשימה האקטיבית
+    activeStreams.delete(streamId);
+    console.log(`✅ Cleanup complete for ${streamId}`);
   },
 };

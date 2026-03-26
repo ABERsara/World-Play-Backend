@@ -38,8 +38,8 @@ services:
       context: .
       dockerfile: packages/media-server/Dockerfile
     restart: unless-stopped
-    #volumes:
-    #  - ./packages/media-server/public/streams:/usr/src/app/packages/media-server/public/streams
+    volumes:
+      - ./packages/media-server/public/streams:/usr/src/app/packages/media-server/public/streams
     env_file: .env
     ports:
       - "8000:8000"

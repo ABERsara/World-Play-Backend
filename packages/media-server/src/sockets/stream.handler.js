@@ -18,7 +18,21 @@ export const registerStreamHandlers = (io, socket) => {
 
   socket.on(SOCKET_EVENTS.STREAM.INIT_BROADCAST, async (data, callback) => {
     try {
-      logger.info(`Initiating broadcast for user: ${user.id}`);
+      // 1. בדיקה אם המשתמש כבר משדר (מניעת כפילויות)
+      if (user && user.id) {
+        const activeStream = Object.values(streams).find(
+          (s) => s.hostUserId === user.id
+        );
+        if (activeStream) {
+          return callback({
+            error:
+              'You already have an active broadcast. Please close it first.',
+          });
+        }
+      }
+
+      // 2. יצירת השידור בשרת האפליקציה
+      logger.info(`Initiating broadcast for user: ${user?.id}`);
       const response = await fetch('http://app-server:8080/api/streams', {
         method: 'POST',
         headers: {
@@ -27,9 +41,14 @@ export const registerStreamHandlers = (io, socket) => {
         },
         body: JSON.stringify({ title: data.title || 'שידור חדש' }),
       });
+
       const result = await response.json();
-      if (!response.ok)
+
+      if (!response.ok) {
         throw new Error(result.error || 'Failed to create stream in DB');
+      }
+
+      // 3. החזרת ה-streamId לקליינט
       callback({ streamId: result.stream.id });
     } catch (error) {
       logger.error(`Failed to init broadcast: ${error.message}`);
@@ -271,6 +290,23 @@ export const registerStreamHandlers = (io, socket) => {
   socket.on(SOCKET_EVENTS.STREAM.ENDED, async () => {
     for (const streamId in streams) {
       if (streams[streamId].hostSocketId === socket.id) {
+        await handleCloseStream(streamId, io);
+      }
+    }
+  });
+  // טיפול בניתוק פתאומי
+  socket.on('disconnect', async () => {
+    logger.info(`Socket disconnected: ${socket.id}`);
+
+    for (const streamId in streams) {
+      // אם זה ה-Host שהתנתק
+      if (streams[streamId].hostSocketId === socket.id) {
+        logger.info(`Host disconnected, cleaning up stream: ${streamId}`);
+
+        // קריאה לשירות הניקוי
+        await StreamService.stopRecording(streamId);
+
+        // עדכון סטטוס ב-DB וסגירת החדר
         await handleCloseStream(streamId, io);
       }
     }
