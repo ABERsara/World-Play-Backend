@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+export * from './constants/socketEvents.js';
 // סכמה ליצירת משחק
 export const CreateGameSchema = z.object({
   roomName: z.string().min(3, 'שם החדר חייב להכיל לפחות 3 תווים'),
@@ -10,7 +11,7 @@ export const CreateGameSchema = z.object({
 // סכמה להצטרפות למשחק
 export const JoinGameSchema = z.object({
   gameId: z.string().uuid('מזהה משחק לא תקין'),
-  role: z.enum(['PLAYER', 'VIEWER']).optional().default('VIEWER'),
+  role: z.enum(['HOST', 'PLAYER', 'VIEWER']).optional().default('VIEWER'),
 });
 
 export const SubmitAnswerSchema = z.object({

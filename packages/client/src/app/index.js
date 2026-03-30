@@ -6,26 +6,25 @@ import {
   StyleSheet,
   SafeAreaView,
 } from 'react-native';
+import { useDispatch } from 'react-redux';
+import { initGameSession } from '../store/slices/gameStreamSlice';
 
-// ייבוא המסכים שלך
 import LoginScreen from '../screens/LoginScreen';
 import ShopScreen from '../screens/ShopScreen';
 import GameScreen from '../screens/GameScreen';
-import InboxScreen from '../screens/InboxScreen'; // המסך החדש שבנינו
+import HostTestScreen from './host_test';
+import InboxScreen from '../screens/InboxScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 
 export default function Page() {
   const [user, setUser] = useState(null);
-  const [currentScreen, setCurrentScreen] = useState('HOME'); // ניהול הניווט
+  const [currentScreen, setCurrentScreen] = useState('HOME');
+  const dispatch = useDispatch();
 
-  // 1. הגנה: אם המשתמש לא מחובר, מציגים תמיד את מסך הלוגין
   if (!user) {
     return <LoginScreen onLoginSuccess={(data) => setUser(data)} />;
   }
 
-  /**
-   * פונקציה עזר ליצירת כפתור חזרה (Header)
-   */
   const renderHeader = (title) => (
     <View style={styles.backHeader}>
       <TouchableOpacity
@@ -38,7 +37,6 @@ export default function Page() {
     </View>
   );
 
-  // 2. ניווט למסך חנות/יתרות
   if (currentScreen === 'SHOP') {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
@@ -48,17 +46,24 @@ export default function Page() {
     );
   }
 
-  // 3. ניווט למסך משחק
   if (currentScreen === 'GAME') {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
         {renderHeader('משחק פעיל')}
-        <GameScreen gameId="8b796ee0-179d-4328-a184-2be8205eaf63" />
+        <GameScreen />
       </SafeAreaView>
     );
   }
 
-  // 4. ניווט למסך ה-Inbox (התראות)
+  if (currentScreen === 'HOST_TEST') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
+        {renderHeader('טסט מארח')}
+        <HostTestScreen />
+      </SafeAreaView>
+    );
+  }
+
   if (currentScreen === 'INBOX') {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#030712' }}>
@@ -77,7 +82,6 @@ export default function Page() {
     );
   }
 
-  // 6. מסך הבית (תפריט ראשי)
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -85,9 +89,27 @@ export default function Page() {
 
         <TouchableOpacity
           style={styles.menuBtn}
-          onPress={() => setCurrentScreen('GAME')}
+          onPress={() => {
+            dispatch(
+              initGameSession({
+                gameId: '8b796ee0-179d-4328-a184-2be8205eaf63',
+                role: 'PLAYER',
+              })
+            );
+            setCurrentScreen('GAME');
+          }}
         >
-          <Text style={styles.btnText}>🎮 כניסה למשחק פעיל</Text>
+          <Text style={styles.btnText}>🎮 כניסה למשחק פעיל (PLAYER)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.menuBtn, { backgroundColor: '#ff4757' }]}
+          onPress={() => {
+            dispatch(initGameSession({ role: 'HOST' }));
+            setCurrentScreen('HOST_TEST');
+          }}
+        >
+          <Text style={styles.btnText}>🧪 טסט מארח (HOST)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -97,7 +119,6 @@ export default function Page() {
           <Text style={styles.btnText}>🪙 חנות ויתרות</Text>
         </TouchableOpacity>
 
-        {/* כפתור האינבוקס החדש */}
         <TouchableOpacity
           style={[styles.menuBtn, { backgroundColor: '#60a5fa' }]}
           onPress={() => setCurrentScreen('INBOX')}
@@ -124,15 +145,8 @@ export default function Page() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
+  container: { flex: 1, backgroundColor: '#1a1a1a' },
+  content: { flex: 1, justifyContent: 'center', padding: 20 },
   welcome: {
     color: '#fff',
     fontSize: 26,
@@ -146,18 +160,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 16,
     alignItems: 'center',
-    elevation: 3, // צל לאנדרואיד
-    shadowColor: '#000', // צל לאייפון
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
-  btnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
+  btnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   backHeader: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -166,26 +170,11 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 15,
     backgroundColor: '#2f3542',
-    borderBottomWidth: 1,
-    borderColor: '#3e4452',
   },
-  backBtn: {
-    padding: 8,
-  },
-  backText: {
-    color: '#ffa502',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  logoutBtn: {
-    marginTop: 40,
-    alignItems: 'center',
-  },
+  backBtn: { padding: 8 },
+  backText: { color: '#ffa502', fontWeight: '800', fontSize: 14 },
+  headerTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  logoutBtn: { marginTop: 40, alignItems: 'center' },
   logoutText: {
     color: '#ff4757',
     textDecorationLine: 'underline',

@@ -1,15 +1,16 @@
 import { PrismaClient } from '@prisma/client';
-import { JoinGameSchema } from '@worldplay/shared';
+import { JoinGameSchema, SOCKET_EVENTS } from '@worldplay/shared';
 import { logger } from '../utils/logger.js';
 import * as gameRules from '../services/validation.service.js';
+import gameService from '../services/game.service.js';
 
 const prisma = new PrismaClient();
 
 export const registerGameHandlers = (io, socket) => {
   const user = socket.user;
 
-  // --- אירוע: הצטרפות לחדר ---
-  socket.on('join_room', async (payload) => {
+  // ---אירוע: הצטרפות לחדר ---
+  socket.on(SOCKET_EVENTS.GAME.JOIN, async (payload) => {
     // שלב 1: ולידציה מבנית (Zod) - השומר בכניסה
     // אנחנו בודקים את המידע שהגיע מהלקוח מול הסכמה המשותפת
     const validationResult = JoinGameSchema.safeParse(payload);
@@ -75,7 +76,7 @@ export const registerGameHandlers = (io, socket) => {
         msg: `Successfully joined game as ${role}`,
       });
 
-      io.to(gameId).emit('room_update', {
+      io.to(gameId).emit(SOCKET_EVENTS.GAME.ROOM_UPDATE, {
         type: 'USER_JOINED',
         userId: user.id,
         username: user.username,
@@ -87,8 +88,30 @@ export const registerGameHandlers = (io, socket) => {
       socket.emit('error', { msg: error.message });
     }
   });
+  // בתוך registerGameHandlers ב-App-Server
+  socket.on(SOCKET_EVENTS.GAME.CREATE, async (payload, callback) => {
+    try {
+      const { title, description } = payload;
 
-  socket.on('place_bet', async (payload) => {
+      const game = await gameService.createGame(user.id, {
+        title,
+        description,
+      });
+
+      console.log(`🎮 Game created via Socket: ${game.id} by ${user.username}`);
+
+      // מחזירים לקליינט את הנתונים, כולל ה-streamId שהסרוויס יצר בטרנזקציה
+      callback({
+        success: true,
+        gameId: game.id,
+        streamId: game.streamId, // מתקן: זה מה שמוחזר מ-gameService
+      });
+    } catch (error) {
+      console.error('Socket game:create error:', error);
+      callback({ error: 'נכשל ביצירת משחק: ' + error.message });
+    }
+  });
+  socket.on(SOCKET_EVENTS.GAME.PLACE_BET, async (payload) => {
     try {
       const { gameId, questionId, optionId, amount } = payload;
       const userId = socket.user.id;

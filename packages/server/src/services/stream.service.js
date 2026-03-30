@@ -2,77 +2,27 @@
 
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
-import { PassThrough } from 'stream';
+// import { PassThrough } from 'stream';
 
 const prisma = new PrismaClient();
 const MEDIA_SERVER_URL = 'http://media-server:8000';
 
 const streamService = {
   async startStream(streamId, inputPipe) {
-    console.log(`📡 Redirecting stream ${streamId} to Media Server...`);
-
-    // *** יצירת buffer stream כדי לשמור את המידע ***
-    const bufferStream = new PassThrough();
-
-    let totalBytes = 0;
-    let chunks = [];
-
-    // אוסף את כל המידע לפני שליחה
-    inputPipe.on('data', (chunk) => {
-      totalBytes += chunk.length;
-      chunks.push(chunk);
-      bufferStream.write(chunk);
-
-      if (
-        Math.floor(totalBytes / 1000000) >
-        Math.floor((totalBytes - chunk.length) / 1000000)
-      ) {
-        console.log(
-          `📥 App Server Progress: ${(totalBytes / 1024 / 1024).toFixed(2)} MB received`
-        );
-      }
-    });
-
-    // כשהקלט נגמר - שלח הכל ל-Media Server
-    inputPipe.on('end', async () => {
-      console.log(
-        `✅ Full video received: ${(totalBytes / 1024 / 1024).toFixed(2)} MB`
-      );
-      bufferStream.end();
-
-      // עכשיו שלח ל-Media Server
-      try {
-        const finalBuffer = Buffer.concat(chunks);
-        console.log(
-          `🚀 Sending ${finalBuffer.length} bytes to Media Server...`
-        );
-
-        const response = await axios({
-          method: 'post',
-          url: `${MEDIA_SERVER_URL}/live/start/${streamId}`,
-          data: finalBuffer,
-          headers: {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': finalBuffer.length,
-          },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-          timeout: 60000, // 60 שניות timeout
-        });
-
-        console.log(`✅ Media Server response:`, response.data);
-      } catch (error) {
-        console.error(`❌ Failed to send to Media Server:`, error.message);
-        throw error;
-      }
-    });
-
-    inputPipe.on('error', (err) => {
-      console.error(`❌ Input pipe error:`, err.message);
-      bufferStream.destroy(err);
-    });
+    // יצירת בקשת POST שהיא בעצמה Stream
+    try {
+      await axios({
+        method: 'post',
+        url: `${MEDIA_SERVER_URL}/live/start/${streamId}`,
+        data: inputPipe, // הזרמה ישירה של ה-Request המקורי לשרת המדיה
+        headers: { 'Content-Type': 'application/octet-stream' },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
+    } catch (err) {
+      console.error('Stream pipe failed', err.message);
+    }
   },
-
   async updateStreamStatus(streamId, userId, newStatus) {
     const stream = await prisma.stream.findUnique({ where: { id: streamId } });
     if (!stream) throw new Error('Stream not found');

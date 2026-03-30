@@ -1,12 +1,22 @@
-//game.service.js
 import { PrismaClient } from '@prisma/client';
 import permissionsService from './permissions.service.js';
 import * as gameRules from '../services/validation.service.js';
 const prisma = new PrismaClient();
 
+async function cancelOldGames(userId) {
+  return await prisma.game.updateMany({
+    where: {
+      hostId: userId,
+      status: { in: ['WAITING', 'ACTIVE'] },
+    },
+    data: { status: 'FINISHED' },
+  });
+}
+
 const gameService = {
   async createGame(userId, { title, description, moderatorId }) {
     await gameRules.validateHostIsAvailable(userId);
+    await cancelOldGames(userId);
 
     return await prisma.$transaction(async (tx) => {
       const newStream = await tx.stream.create({
@@ -36,7 +46,7 @@ const gameService = {
         },
       });
 
-      // ✅ חדש: רישום פעילות למארח
+      // ✅ רישום פעילות למארח
       await tx.userGameActivity.create({
         data: {
           userId: userId,
@@ -45,10 +55,7 @@ const gameService = {
         },
       });
 
-      return {
-        ...newGame,
-        streamId: newStream.id,
-      };
+      return { ...newGame, streamId: newStream.id };
     });
   },
 
@@ -64,15 +71,10 @@ const gameService = {
     }
 
     const newParticipant = await prisma.gameParticipant.create({
-      data: {
-        gameId,
-        userId,
-        role: role,
-        score: 0,
-      },
+      data: { gameId, userId, role, score: 0 },
     });
 
-    // ✅ חדש: רישום פעילות למשתתף
+    // ✅ רישום פעילות למשתתף
     await prisma.userGameActivity.upsert({
       where: {
         userId_gameId: { userId, gameId },
@@ -96,10 +98,8 @@ const gameService = {
     const dataToUpdate = { status: newStatus };
     const now = new Date();
 
-    if (newStatus === 'ACTIVE') {
-      if (!game.startedAt) {
-        dataToUpdate.startedAt = now;
-      }
+    if (newStatus === 'ACTIVE' && !game.startedAt) {
+      dataToUpdate.startedAt = now;
     } else if (newStatus === 'FINISHED') {
       dataToUpdate.finishedAt = now;
     }
@@ -124,9 +124,7 @@ const gameService = {
         status: { in: ['WAITING', 'ACTIVE'] },
       },
       include: {
-        host: {
-          select: { username: true, followersCount: true },
-        },
+        host: { select: { username: true, followersCount: true } },
         stream: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -191,7 +189,6 @@ const gameService = {
   },
 
   async getGameViewers(gameId, currentUserId) {
-    // שולפים את כל הצופים מה-ViewLog
     const viewLogs = await prisma.viewLog.findMany({
       where: { gameId },
       select: { userId: true },
@@ -199,7 +196,6 @@ const gameService = {
 
     const viewerIds = [...new Set(viewLogs.map((v) => v.userId))];
 
-    // שולפים את רשימת העוקבים של המשתמש הנוכחי
     const follows = await prisma.follow.findMany({
       where: {
         followerId: currentUserId,
@@ -210,14 +206,10 @@ const gameService = {
 
     const followerIds = new Set(follows.map((f) => f.followingId));
 
-    // מחלקים לעוקבים ומזדמנים
-    const followers = viewerIds.filter((id) => followerIds.has(id));
-    const casual = viewerIds.filter((id) => !followerIds.has(id));
-
     return {
       total: viewerIds.length,
-      followers: followers.length,
-      casual: casual.length,
+      followers: viewerIds.filter((id) => followerIds.has(id)).length,
+      casual: viewerIds.filter((id) => !followerIds.has(id)).length,
     };
   },
 };

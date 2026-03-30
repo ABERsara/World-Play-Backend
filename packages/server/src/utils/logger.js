@@ -34,7 +34,7 @@ export const logger = {
       error
     );
   },
-warn: (msg) => {
+  warn: (msg) => {
     console.warn(
       `${COLORS.yellow}[WARN ${getTimestamp()}]${COLORS.reset} ${msg}`
     );
@@ -43,11 +43,11 @@ warn: (msg) => {
 
   socketConnect: (user, socketId) => {
     const username = user?.username || 'Guest'; // אם אין יוזר, נקרא לו Guest
-const role = user?.role || 'UNKNOWN';
+    const role = user?.role || 'UNKNOWN';
 
-console.log(
-  `${COLORS.green}[SOCKET CONNECT]${COLORS.reset} User: ${COLORS.yellow}${username}${COLORS.reset} (Role: ${role}) | ID: ${socketId}`
-);
+    console.log(
+      `${COLORS.green}[SOCKET CONNECT]${COLORS.reset} User: ${COLORS.yellow}${username}${COLORS.reset} (Role: ${role}) | ID: ${socketId}`
+    );
   },
 
   socketDisconnect: (user, socketId, reason) => {

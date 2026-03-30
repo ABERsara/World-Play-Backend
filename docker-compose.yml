@@ -22,6 +22,8 @@ services:
       dockerfile: packages/server/Dockerfile
     restart: unless-stopped
     env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
       - "5556:5556"
@@ -30,27 +32,24 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-
+    
   media-server:
     build:
       context: .
       dockerfile: packages/media-server/Dockerfile
     restart: unless-stopped
+    volumes:
+      - ./packages/media-server/public/streams:/usr/src/app/packages/media-server/public/streams
     env_file: .env
+    ports:
+      - "8000:8000"
+      - "10000-10010:10000-10010/udp"
+      - "11000-11020:11000-11020/udp" 
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
-      - ANNOUNCED_IP=${ANNOUNCED_IP:-192.168.56.1}
-      - MEDIA_PORT=8000
-    ports:
-    - "10007:8000"              # ממפה את 10007 (בחוץ) ל-8000 (בפנים)
-    - "11000-11200:11000-11200/udp"
-    - "11000-11200:11000-11200/tcp"
-    depends_on:
-      db:
-        condition: service_healthy
+      - ANNOUNCED_IP=${ANNOUNCED_IP} 
+      - RTC_MIN_PORT=10000       # חשוב: אומר למדיה סרבר להשתמש בטווח הזה
+      - RTC_MAX_PORT=10010
 
   prisma-studio:
     build:

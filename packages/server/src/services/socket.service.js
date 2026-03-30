@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import { SOCKET_EVENTS } from '@worldplay/shared';
 import { registerGameHandlers } from '../sockets/game.handler.js';
 import { socketAuth } from '../middleware/socketAuth.js';
 export const initializeSocketIO = (httpServer) => {
@@ -17,7 +18,7 @@ export const initializeSocketIO = (httpServer) => {
       console.log(`✅ User ${user.id} joined private room`);
     }
 
-    socket.on('disconnect', () => {
+    socket.on(SOCKET_EVENTS.SYSTEM.DISCONNECT, () => {
       console.log('❌ User disconnected:', socket.id);
     });
   });

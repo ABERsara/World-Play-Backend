@@ -91,16 +91,17 @@ export const validateUserHasNoActiveStream = async (userId) => {
 };
 
 export const validateHostIsAvailable = async (userId) => {
-  const activeEngagement = await prisma.gameParticipant.findFirst({
+  const activeHosting = await prisma.gameParticipant.findFirst({
     where: {
       userId: userId,
+      role: 'HOST',
       game: { status: { in: ['WAITING', 'ACTIVE'] } },
     },
     include: { game: true },
   });
-  if (activeEngagement) {
+  if (activeHosting) {
     throw new Error(
-      `You cannot host a new game while active in: "${activeEngagement.game.title}"`
+      `You cannot host a new game while hosting: "${activeHosting.game.title}"`
     );
   }
 };
