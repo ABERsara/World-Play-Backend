@@ -5,18 +5,10 @@ import * as gameRules from '../services/validation.service.js';
 const prisma = new PrismaClient();
 
 const gameService = {
-  /**
-   * יצירת משחק חדש (כולל יצירת סטרים אוטומטית!)
-   * המארח שולח רק פרטי משחק, אנחנו דואגים לשאר.
-   */
   async createGame(userId, { title, description, moderatorId }) {
-    // בדיקה שהמארח פנוי
     await gameRules.validateHostIsAvailable(userId);
 
-    // --- טרנזקציה: יצירת סטרים + משחק + משתתף במכה אחת ---
     return await prisma.$transaction(async (tx) => {
-      // 1. יצירת סטרים אוטומטית (מוסתר מהמשתמש)
-      //  הסטרים מתחיל ב-WAITING
       const newStream = await tx.stream.create({
         data: {
           title: `Stream for: ${title}`,
@@ -25,7 +17,6 @@ const gameService = {
         },
       });
 
-      // 2. יצירת המשחק (מקושר לסטרים שיצרנו הרגע)
       const newGame = await tx.game.create({
         data: {
           title,
@@ -37,7 +28,6 @@ const gameService = {
         },
       });
 
-      // 3. רישום המארח כמשתתף (HOST)
       await tx.gameParticipant.create({
         data: {
           gameId: newGame.id,
@@ -46,18 +36,22 @@ const gameService = {
         },
       });
 
-      // אנחנו מחזירים את אובייקט המשחק, אבל "מזריקים" לתוכו גם את ה-Stream ID
-      // כדי שהקליינט ידע לאן להתחבר ב-WebRTC
+      // ✅ חדש: רישום פעילות למארח
+      await tx.userGameActivity.create({
+        data: {
+          userId: userId,
+          gameId: newGame.id,
+          relationType: 'HOST',
+        },
+      });
+
       return {
         ...newGame,
         streamId: newStream.id,
       };
     });
   },
-  /**
-   * הצטרפות שחקן למשחק
-   * כולל ולידציה עסקית: שחקן לא יכול לשחק בשני משחקים פעילים במקביל.
-   */
+
   async joinGame(gameId, userId, role = 'PLAYER') {
     const eligibility = await gameRules.validateJoinEligibility(
       gameId,
@@ -69,7 +63,6 @@ const gameService = {
       return { participant: eligibility.participant, alreadyJoined: true };
     }
 
-    // 3. יצירת המשתתף
     const newParticipant = await prisma.gameParticipant.create({
       data: {
         gameId,
@@ -79,44 +72,45 @@ const gameService = {
       },
     });
 
+    // ✅ חדש: רישום פעילות למשתתף
+    await prisma.userGameActivity.upsert({
+      where: {
+        userId_gameId: { userId, gameId },
+      },
+      update: {},
+      create: {
+        userId,
+        gameId,
+        relationType: role,
+      },
+    });
+
     return { alreadyJoined: false, participant: newParticipant };
   },
 
-  // עדכון סטטוס המשחק
   async updateGameStatus(gameId, userId, newStatus) {
-    //הרשאות אבטחה וולידציות
-    // 1. Validation: קיום המשחק
     const game = await gameRules.ensureGameExists(gameId);
-
-    // 2. Permission: רק מארח
     await permissionsService.ensureHost(gameId, userId);
-
-    // 3. Validation: חוקיות המעבר
     gameRules.validateStatusTransition(game.status, newStatus);
 
-    // לוגיקה עסקית
     const dataToUpdate = { status: newStatus };
-
     const now = new Date();
-    // א. המארח לחץ "התחל משחק" (Go Live)
+
     if (newStatus === 'ACTIVE') {
       if (!game.startedAt) {
         dataToUpdate.startedAt = now;
       }
+    } else if (newStatus === 'FINISHED') {
+      dataToUpdate.finishedAt = now;
     }
 
-    // ב. המארח לחץ "סיים משחק"
-    else if (newStatus === 'FINISHED') {
-      dataToUpdate.finishedAt = now; // נועלים את זמן הסיום
-    }
-    //עדכון הסטטוס במסד הנתונים
     return await prisma.game.update({
       where: { id: gameId },
       data: dataToUpdate,
     });
   },
+
   async getFollowedFeed(userId) {
-    // 1. מוצאים את כל ה-ID של האנשים שהמשתמש עוקב אחריהם
     const following = await prisma.follow.findMany({
       where: { followerId: userId },
       select: { followingId: true },
@@ -124,11 +118,10 @@ const gameService = {
 
     const followingIds = following.map((f) => f.followingId);
 
-    // 2. שולפים משחקים שהמארח שלהם נמצא ברשימה הזו
     return await prisma.game.findMany({
       where: {
         hostId: { in: followingIds },
-        status: { in: ['WAITING', 'ACTIVE'] }, // רק משחקים שרלוונטיים עכשיו
+        status: { in: ['WAITING', 'ACTIVE'] },
       },
       include: {
         host: {
@@ -138,6 +131,94 @@ const gameService = {
       },
       orderBy: { createdAt: 'desc' },
     });
+  },
+
+  async getGameHistory(userId) {
+    const activities = await prisma.userGameActivity.findMany({
+      where: {
+        userId,
+        isDeleted: false,
+      },
+      include: {
+        game: {
+          include: {
+            host: { select: { id: true, username: true } },
+            userPoints: {
+              where: { userId },
+              select: { pointType: true, amount: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const pinned = activities.filter((a) => a.isPinned);
+    const notPinned = activities.filter((a) => !a.isPinned);
+    const combined = [...pinned, ...notPinned].slice(0, 10);
+
+    const withBreakdown = combined.map((a) => {
+      const breakdown = { TRIVIA: 0, DONATION: 0, BONUS: 0, GAME: 0 };
+      for (const point of a.game.userPoints) {
+        if (breakdown[point.pointType] !== undefined) {
+          breakdown[point.pointType] += Number(point.amount);
+        }
+      }
+      const total = Object.values(breakdown).reduce((sum, v) => sum + v, 0);
+      return { ...a, breakdown, total };
+    });
+
+    return {
+      all: withBreakdown,
+      asHost: withBreakdown.filter((a) => a.relationType === 'HOST'),
+      asPlayer: withBreakdown.filter((a) =>
+        ['PLAYER', 'VIEWER', 'MODERATOR'].includes(a.relationType)
+      ),
+    };
+  },
+
+  async togglePin(userId, gameId) {
+    const activity = await prisma.userGameActivity.findUnique({
+      where: { userId_gameId: { userId, gameId } },
+    });
+
+    if (!activity) throw new Error('Activity not found');
+
+    return await prisma.userGameActivity.update({
+      where: { userId_gameId: { userId, gameId } },
+      data: { isPinned: !activity.isPinned },
+    });
+  },
+
+  async getGameViewers(gameId, currentUserId) {
+    // שולפים את כל הצופים מה-ViewLog
+    const viewLogs = await prisma.viewLog.findMany({
+      where: { gameId },
+      select: { userId: true },
+    });
+
+    const viewerIds = [...new Set(viewLogs.map((v) => v.userId))];
+
+    // שולפים את רשימת העוקבים של המשתמש הנוכחי
+    const follows = await prisma.follow.findMany({
+      where: {
+        followerId: currentUserId,
+        followingId: { in: viewerIds },
+      },
+      select: { followingId: true },
+    });
+
+    const followerIds = new Set(follows.map((f) => f.followingId));
+
+    // מחלקים לעוקבים ומזדמנים
+    const followers = viewerIds.filter((id) => followerIds.has(id));
+    const casual = viewerIds.filter((id) => !followerIds.has(id));
+
+    return {
+      total: viewerIds.length,
+      followers: followers.length,
+      casual: casual.length,
+    };
   },
 };
 

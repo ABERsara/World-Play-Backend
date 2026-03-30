@@ -20,4 +20,17 @@ router.post('/:id/join', gameController.joinGame);
 // GET /api/games/feed
 router.get('/feed', authenticateToken, gameController.getFeed);
 
+// GET /api/games/history
+router.get('/history', gameController.getHistory);
+
+// PATCH /api/games/:gameId/pin
+router.patch('/:gameId/pin', gameController.togglePin);
+
+router.post('/migrate-activities', gameController.migrateActivities);
+
+// GET /api/games/:gameId/viewers
+router.get('/:gameId/viewers', gameController.getGameViewers);
+
+router.post('/seed-viewlogs', gameController.seedViewLogs);
+
 export default router;
