@@ -1,22 +1,27 @@
 const path = require('path');
-const { getDefaultConfig } = require('expo/metro-config'); // או מ-@react-native/metro-config תלוי בפרויקט
+const { getDefaultConfig } = require('expo/metro-config');
 
-// מציאת הנתיב לתיקיית ה-Workspace הראשית
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// 1. הוספת התיקייה הראשית (Workspace Root) לרשימת התיקיות ש-Metro עוקב אחריהן
 config.watchFolders = [workspaceRoot];
 
-// 2. הפניית Metro לחיפוש מודולים גם ב-node_modules הראשי וגם במקומי
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// במקרים מסוימים צריך למנוע כפילויות של React אם הוא מותקן גם למעלה,
-// אך בשלב זה נשאיר זאת פשוט.
+// ✅ חדש: mock ל-WebRTC כדי שיעבוד ב-Expo Go
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'react-native-webrtc') {
+    return {
+      filePath: path.resolve(projectRoot, 'src/mocks/webrtc.mock.js'),
+      type: 'sourceFile',
+    };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
 
 module.exports = config;
