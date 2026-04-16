@@ -33,4 +33,13 @@ router.get('/:gameId/viewers', gameController.getGameViewers);
 
 router.post('/seed-viewlogs', gameController.seedViewLogs);
 
+// PATCH /api/games/:gameId/camera
+router.patch('/:gameId/camera', gameController.toggleCamera);
+
+// PATCH /api/games/:gameId/grant-moderator-invite
+router.patch(
+  '/:gameId/grant-moderator-invite',
+  gameController.grantModeratorInvite
+);
+
 export default router;

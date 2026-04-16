@@ -4,6 +4,8 @@ const prisma = new PrismaClient();
 // game.controller.js
 import gameService from '../services/game.service.js';
 
+import permissionsService from '../services/permissions.service.js';
+
 const gameController = {
   // POST /api/games
   async createGame(req, res) {
@@ -236,6 +238,39 @@ const gameController = {
 
       res.json({ success: true, message: 'נתוני בדיקה נוצרו' });
     } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  async toggleCamera(req, res) {
+    try {
+      const { gameId } = req.params;
+      const userId = req.user.id;
+      const data = await permissionsService.toggleCamera(gameId, userId);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      if (error.message.includes('Camera limit reached')) {
+        return res.status(403).json({ error: error.message });
+      }
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  async grantModeratorInvite(req, res) {
+    try {
+      const { gameId } = req.params;
+      const hostId = req.user.id;
+      const { targetUserId } = req.body;
+      const data = await permissionsService.grantModeratorInvite(
+        gameId,
+        hostId,
+        targetUserId
+      );
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      if (error.message.includes('Permission denied')) {
+        return res.status(403).json({ error: error.message });
+      }
       res.status(500).json({ error: error.message });
     }
   },

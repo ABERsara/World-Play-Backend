@@ -170,6 +170,10 @@ model GameParticipant {
   
   score        Decimal  @default(0.00) @db.Decimal(10, 2)
   
+  // ✅ חדש: בקרת חדר
+  isCameraActive      Boolean @default(false) @map("is_camera_active")
+  canInviteModerator  Boolean @default(false) @map("can_invite_moderator")
+  
   joinedAt     DateTime @default(now()) @map("joined_at")
   game         Game     @relation(fields: [gameId], references: [id])
   user         User     @relation(fields: [userId], references: [id])
