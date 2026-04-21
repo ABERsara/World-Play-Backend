@@ -142,4 +142,35 @@ export const registerGameHandlers = (io, socket) => {
       socket.emit('error', { msg: 'ההימור נכשל' });
     }
   });
+
+  socket.on(SOCKET_EVENTS.GAME.STATUS_UPDATE, async (payload, callback) => {
+    try {
+      const { gameId, status } = payload;
+      const userId = socket.user.id;
+
+      const validStatuses = ['WAITING', 'ACTIVE', 'FINISHED'];
+
+      if (!status || !validStatuses.includes(status.toUpperCase())) {
+        return callback({
+          error: `סטטוס לא תקין. ערכים מותרים: ${validStatuses.join(', ')}`,
+        });
+      }
+
+      const updatedGame = await gameService.updateGameStatus(
+        gameId,
+        userId,
+        status.toUpperCase()
+      );
+
+      io.emit('game_status_update', {
+        gameId,
+        status: status.toUpperCase(),
+      });
+
+      callback({ success: true, game: updatedGame });
+    } catch (error) {
+      console.error('Socket status update error:', error);
+      callback({ error: error.message });
+    }
+  });
 };

@@ -19,30 +19,25 @@ const ensureDirectory = (streamId) => {
 
 const createUnifiedSDP = (streamPath, videoPort, audioPort) => {
   const ip = '127.0.0.1';
-  const sdpLines = [
-    'v=0',
-    `o=- 0 0 IN IP4 ${ip}`,
-    's=Mediasoup',
-    `c=IN IP4 ${ip}`,
-    't=0 0',
-    // וידאו
-    `m=video ${videoPort} RTP/AVP 101`,
-    'a=rtpmap:101 VP8/90000',
-    'a=rtcp-mux',
-  ];
+  let sdp = `v=0
+o=- 0 0 IN IP4 ${ip}
+s=Mediasoup
+c=IN IP4 ${ip}
+t=0 0
+m=video ${videoPort} RTP/AVP 101
+a=rtpmap:101 VP8/90000
+a=rtcp-mux
+`;
 
-  // הוספת אודיו ל-SDP רק אם הוא קיים
   if (audioPort) {
-    sdpLines.push(
-      `m=audio ${audioPort} RTP/AVP 111`,
-      'a=rtpmap:111 opus/48000/2',
-      'a=rtcp-mux'
-    );
+    sdp += `m=audio ${audioPort} RTP/AVP 111
+a=rtpmap:111 opus/48000/2
+a=rtcp-mux
+`;
   }
 
-  const sdpContent = sdpLines.join('\r\n') + '\r\n';
   const sdpPath = path.join(streamPath, 'input.sdp');
-  fs.writeFileSync(sdpPath, sdpContent);
+  fs.writeFileSync(sdpPath, sdp);
   return sdpPath;
 };
 
@@ -52,11 +47,12 @@ const spawnFFmpeg = (sdpPath, streamPath, streamId, hasAudio) => {
     'info',
     '-protocol_whitelist',
     'rtp,udp,file,crypto,data,pipe',
-    // אופטימיזציה למניעת Drops ודיליי
     '-fflags',
     '+genpts+discardcorrupt+nobuffer',
-    '-flags',
-    'low_delay',
+    '-probesize',
+    '32', // הקטנה משמעותית כדי להתחיל מיד
+    '-analyzeduration',
+    '0', // ביטול ניתוח דאטה מקדים
     '-f',
     'sdp',
     '-i',
@@ -80,6 +76,15 @@ const spawnFFmpeg = (sdpPath, streamPath, streamId, hasAudio) => {
     'zerolatency',
     '-pix_fmt',
     'yuv420p',
+
+    // הגדרות Keyframes - קריטי למניעת תקיעות ו"Keyframe missing"
+    '-g',
+    '15', // Keyframe כל 15 פריימים (סופר מהיר)
+    '-keyint_min',
+    '15',
+    '-sc_threshold',
+    '0', // מנטרל זיהוי סצנות כדי להכריח Keyframes קבועים
+
     // הגדרות אודיו (AAC נתמך הכי טוב ב-HLS)
     '-c:a',
     'aac',
@@ -87,6 +92,9 @@ const spawnFFmpeg = (sdpPath, streamPath, streamId, hasAudio) => {
     '44100',
     '-ac',
     '2',
+    '-b:a',
+    '128k',
+
     // הגדרות HLS
     '-f',
     'hls',
@@ -99,109 +107,147 @@ const spawnFFmpeg = (sdpPath, streamPath, streamId, hasAudio) => {
     path.join(streamPath, 'index.m3u8')
   );
 
-  const ffmpeg = spawn('ffmpeg', args, {
-    stdio: ['pipe', 'inherit', 'inherit'],
-  });
-
-  ffmpeg.on('error', (err) =>
-    console.error(`❌ FFmpeg Error [${streamId}]:`, err.message)
+  console.log(
+    `🚀 [FFMPEG] Spawning process for stream: ${streamId} (Audio: ${hasAudio})`
   );
 
+  const ffmpeg = spawn('ffmpeg', args, {
+    stdio: ['pipe', 'inherit', 'inherit'], // inherit יזרוק את הלוגים ישירות לטרמינל של הדוקר
+  });
+
+  ffmpeg.on('error', (err) => {
+    console.error(`❌ FFmpeg Error [${streamId}]:`, err.message);
+  });
+
   ffmpeg.on('close', (code) => {
-    console.log(`🎬 FFmpeg closed (code ${code}) for ${streamId}`);
-    activeStreams.delete(streamId);
+    // קוד 255 או 0 בדרך כלל אומר סגירה יזומה שלנו (SIGKILL/SIGINT)
+    console.log(`🎬 FFmpeg process for ${streamId} closed with code ${code}`);
+
+    // ניקוי המפה במידה והתהליך נסגר מעצמו
+    if (activeStreams.has(streamId)) {
+      activeStreams.delete(streamId);
+    }
   });
 
   return ffmpeg;
 };
 
 // --- הפונקציה הראשית ---
+const ffmpegTimers = new Map();
 
 export const StreamService = {
   async startRecording(streamId, router, producer) {
-    const kind = producer.kind; // 'video' או 'audio'
+    const kind = producer.kind;
 
-    // יצירת אובייקט מצב לסטרים אם הוא לא קיים
     if (!activeStreams.has(streamId)) {
       activeStreams.set(streamId, {
         videoConsumer: null,
         audioConsumer: null,
         ffmpeg: null,
         streamPath: ensureDirectory(streamId),
+        videoPort: 11000 + Math.floor(Math.random() * 500),
+        audioPort: 12000 + Math.floor(Math.random() * 500),
       });
     }
 
     const state = activeStreams.get(streamId);
 
     try {
-      // 1. יצירת Transport וחיבורו
       const transport = await createPlainTransportForFFmpeg(router);
-      const rtpPort = 11000 + Math.floor(Math.random() * 1000);
-      await transport.connect({ ip: '127.0.0.1', port: rtpPort });
+      const targetPort = kind === 'video' ? state.videoPort : state.audioPort;
+      await transport.connect({ ip: '127.0.0.1', port: targetPort });
 
-      // 2. יצירת Consumer
       const consumer = await transport.consume({
         producerId: producer.id,
         rtpCapabilities: router.rtpCapabilities,
         paused: false,
       });
 
-      // שמירת ה-Consumer במצב
-      if (kind === 'video') state.videoConsumer = { consumer, rtpPort };
-      else state.audioConsumer = { consumer, rtpPort };
+      if (kind === 'video') state.videoConsumer = { consumer, transport };
+      else state.audioConsumer = { consumer, transport };
 
-      console.log(`📡 [${kind.toUpperCase()}] linked to port ${rtpPort}`);
+      console.log(
+        `📡 [${kind.toUpperCase()}] Consumer ready on port ${targetPort}`
+      );
 
-      // 3. החלטה האם להפעיל את FFmpeg
-      // אנחנו מחכים שיהיה וידאו. אם יש גם אודיו - מעולה, נחבר את שניהם.
-      if (kind === 'video') {
-        // אם כבר רץ FFmpeg, נסגור אותו (למקרה של Refresh)
-        if (state.ffmpeg) state.ffmpeg.kill();
+      // --- לוגיקת סנכרון משופרת ---
 
-        setTimeout(async () => {
-          const sdpPath = createUnifiedSDP(
-            state.streamPath,
-            state.videoConsumer.rtpPort,
-            state.audioConsumer?.rtpPort
-          );
+      // פונקציה פנימית שמפעילה את FFmpeg
+      const launchFFmpeg = () => {
+        const currentState = activeStreams.get(streamId);
+        if (!currentState || currentState.ffmpeg || !currentState.videoConsumer)
+          return;
 
-          state.ffmpeg = spawnFFmpeg(
-            sdpPath,
-            state.streamPath,
-            streamId,
-            !!state.audioConsumer
-          );
+        // בודקים אם יש אודיו - אם לא, והטיימר לא נגמר, נחכה עוד קצת
+        const hasAudio = !!currentState.audioConsumer;
 
-          console.log(
-            `🎥 FFmpeg started for stream ${streamId} (Audio: ${!!state.audioConsumer})`
-          );
+        const sdpPath = createUnifiedSDP(
+          currentState.streamPath,
+          currentState.videoPort,
+          hasAudio ? currentState.audioPort : null
+        );
 
-          await state.videoConsumer.consumer.requestKeyFrame().catch(() => {});
+        currentState.ffmpeg = spawnFFmpeg(
+          sdpPath,
+          currentState.streamPath,
+          streamId,
+          hasAudio
+        );
+
+        console.log(`🎥 FFmpeg Launch! Audio Status: ${hasAudio}`);
+
+        // נותנים ל-FFmpeg שניה להתאפס ואז מבקשים Keyframe
+        setTimeout(() => {
+          currentState.videoConsumer.consumer.requestKeyFrame().catch(() => {});
         }, 1000);
+      };
+
+      // אם זה אודיו - הוא כנראה הגיע אחרון, אז ננסה להפעיל מיד
+      if (kind === 'audio') {
+        if (ffmpegTimers.has(streamId)) {
+          clearTimeout(ffmpegTimers.get(streamId));
+          ffmpegTimers.delete(streamId);
+        }
+        launchFFmpeg();
+      }
+      // אם זה וידאו - נחכה 3 שניות לאודיו שיגיע
+      else if (kind === 'video') {
+        const timer = setTimeout(() => {
+          launchFFmpeg(); // מפעיל אחרי 3 שניות גם אם אין אודיו
+          ffmpegTimers.delete(streamId);
+        }, 3000);
+        ffmpegTimers.set(streamId, timer);
       }
     } catch (err) {
-      console.error(`❌ StreamService error [${kind}]:`, err.message);
+      console.error(`❌ StreamService error:`, err.message);
     }
   },
-
   async stopRecording(streamId) {
     const state = activeStreams.get(streamId);
     if (!state) return;
 
-    console.log(`🛑 Stopping stream and cleaning up: ${streamId}`);
+    console.log(`🛑 Stopping stream and DELETING folder: ${streamId}`);
 
-    // 1. הריגת תהליך ה-FFmpeg
+    // 1. הריגת ה-FFmpeg
     if (state.ffmpeg) {
-      state.ffmpeg.kill('SIGINT');
-      state.ffmpeg = null;
+      state.ffmpeg.kill('SIGKILL');
     }
 
-    // 2. סגירת ה-Consumers (כדי לשחרר משאבים ב-Mediasoup)
-    if (state.videoConsumer?.consumer) state.videoConsumer.consumer.close();
-    if (state.audioConsumer?.consumer) state.audioConsumer.consumer.close();
+    // 2. סגירת Consumers
+    if (state.videoConsumer) state.videoConsumer.consumer.close();
+    if (state.audioConsumer) state.audioConsumer.consumer.close();
 
-    // 3. מחיקה מהרשימה האקטיבית
+    // 3. מחיקת התיקייה הפיזית מהדיסק
+    try {
+      if (fs.existsSync(state.streamPath)) {
+        // מוחק את התיקייה וכל מה שבתוכה (סגמנטים, m3u8, sdp)
+        fs.rmSync(state.streamPath, { recursive: true, force: true });
+        console.log(`🗑️ Folder deleted: ${state.streamPath}`);
+      }
+    } catch (err) {
+      console.error(`❌ Failed to delete folder: ${err.message}`);
+    }
+
     activeStreams.delete(streamId);
-    console.log(`✅ Cleanup complete for ${streamId}`);
   },
 };

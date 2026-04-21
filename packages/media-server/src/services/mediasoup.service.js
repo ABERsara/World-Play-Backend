@@ -32,11 +32,10 @@ export const createRouter = (worker) => {
 export const createPlainTransportForFFmpeg = async (router) => {
   const transport = await router.createPlainTransport({
     listenIp: {
-      ip: '127.0.0.1', // FFmpeg ו-Mediasoup באותו קונטיינר, נשתמש ב-Loopback
+      ip: '127.0.0.1',
     },
     rtcpMux: true,
-    comedia: false,
-    rtpPayloadType: 101,
+    comedia: true,
   });
   return transport;
 };

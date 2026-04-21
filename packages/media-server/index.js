@@ -10,6 +10,7 @@ import { socketAuth } from './src/middleware/socketAuth.js';
 import { createWorkers } from './src/services/mediasoup.service.js';
 import { registerStreamHandlers } from './src/sockets/stream.handler.js';
 import statusRoutes from './src/routes/status.routes.js';
+import { StreamService } from './src/services/stream.service.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,9 +24,26 @@ const io = new Server(httpServer, {
 
 app.use(express.json());
 
+// --- הראוטר לעצירת שידור ---
+app.post('/live/stop/:streamId', async (req, res) => {
+  const { streamId } = req.params;
+  logger.info(`🛑 Received stop request for stream: ${streamId}`);
+
+  try {
+    // קריאה לפונקציה -StreamService
+    await StreamService.stopRecording(streamId);
+    res
+      .status(200)
+      .json({ success: true, message: 'Stream stopped and cleaned up' });
+  } catch (err) {
+    logger.error(`❌ Failed to stop stream ${streamId}`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // הגשת קבצי ה-HLS לצפייה
 // עדכון נתיב הגשת הקבצים (HLS ופוסטרים)
-// שינינו מ-'media_files' ל-'public/streams' כדי להתאים ל-FFmpegService
+// שינוי מ-'media_files' ל-'public/streams' כדי להתאים ל-FFmpegService
 app.use('/streams', express.static(path.join(__dirname, 'public', 'streams')));
 
 app.use('/', statusRoutes);

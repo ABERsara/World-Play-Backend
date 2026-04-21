@@ -43,6 +43,8 @@ a=rtcp-mux
     const sdpPath = path.join(this.outputDir, 'input.sdp');
     fs.writeFileSync(sdpPath, sdpString);
 
+    const hasAudio = sdpString.includes('m=audio');
+
     // המתנה של 1.5 שניות כדי לוודא שה-Producer ב-Mediasoup התחיל לשלוח דאטה
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
@@ -55,6 +57,8 @@ a=rtcp-mux
       '+genpts+discardcorrupt+nobuffer',
       '-flags',
       'low_delay',
+      '-max_delay',
+      '500000',
       '-f',
       'sdp',
       '-analyzeduration',
@@ -68,8 +72,7 @@ a=rtcp-mux
       // הוספת מפות (Mapping): מפה 0:0 לוידאו, מפה 0:1 לאודיו
       '-map',
       '0:v:0',
-      '-map',
-      '0:a:0',
+      hasAudio ? ['-map', '0:a:0'] : [],
       '-c:v',
       'libx264',
       '-preset',
@@ -77,6 +80,10 @@ a=rtcp-mux
       '-tune',
       'zerolatency',
       // קידוד אודיו ל-AAC (סטנדרט של HLS)
+      '-g',
+      '30', // מכריח Keyframe כל 30 פריימים (חשוב!)
+      '-error-resilient',
+      '1', // עוזר להתגבר על חבילות שחסרות
       '-c:a',
       'aac',
       '-ar',

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import permissionsService from './permissions.service.js';
 import * as gameRules from '../services/validation.service.js';
 const prisma = new PrismaClient();
+import axios from 'axios';
 
 async function cancelOldGames(userId) {
   return await prisma.game.updateMany({
@@ -77,15 +78,52 @@ const gameService = {
 
     const dataToUpdate = { status: newStatus };
     const now = new Date();
-    if (newStatus === 'ACTIVE' && !game.startedAt) dataToUpdate.startedAt = now;
-    else if (newStatus === 'FINISHED') dataToUpdate.finishedAt = now;
+
+    if (newStatus === 'ACTIVE' && !game.startedAt) {
+      dataToUpdate.startedAt = now;
+    } else if (newStatus === 'FINISHED') {
+      dataToUpdate.finishedAt = now;
+
+      try {
+        // שליפת הנתונים כולל ה-streamId
+        const gameData = await prisma.game.findUnique({
+          where: { id: gameId },
+          select: { streamId: true },
+        });
+
+        if (gameData?.streamId) {
+          // 1. עדכון סטטוס הסטרים ב-DB ל-FINISHED
+          await prisma.stream.update({
+            where: { id: gameData.streamId },
+            data: { status: 'FINISHED', endedAt: now },
+          });
+
+          // 2. פקודה לשרת המדיה להרוג את ה-FFmpeg
+          const MEDIA_URL =
+            process.env.MEDIA_SERVER_INTERNAL_URL || 'http://media-server:8000';
+          console.log(
+            `🛑 Sending STOP to Media Server for stream: ${gameData.streamId}`
+          );
+
+          // אנחנו לא שמים await על ה-axios כדי לא לעכב את תגובת ה-DB למשתמש
+          axios
+            .post(`${MEDIA_URL}/live/stop/${gameData.streamId}`)
+            .catch(() =>
+              console.log('Media Server already cleaned up this stream.')
+            );
+        }
+      } catch {
+        console.error(
+          'Non-critical error during FINISH cleanup: stream cleanup may have already occurred'
+        );
+      }
+    }
 
     return await prisma.game.update({
       where: { id: gameId },
       data: dataToUpdate,
     });
   },
-
   async getFollowedFeed(userId) {
     const following = await prisma.follow.findMany({
       where: { followerId: userId },
