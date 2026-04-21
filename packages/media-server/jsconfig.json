@@ -1,9 +1,11 @@
 {
   "compilerOptions": {
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "checkJs": false,
-    "baseUrl": "."
+    "target": "ES2020"
   },
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
