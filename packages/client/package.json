@@ -20,6 +20,7 @@
     "@reduxjs/toolkit": "^2.11.2",
     "@stripe/stripe-react-native": "^0.50.3",
     "@tybys/wasm-util": "^0.10.1",
+    "@worldplay/shared": "file:../shared",
     "base-64": "^1.0.0",
     "buffer": "^5.7.1",
     "events": "^3.3.0",
@@ -50,8 +51,7 @@
     "react-native-worklets": "0.5.1",
     "react-redux": "^9.2.0",
     "readable-stream": "^2.3.8",
-    "socket.io-client": "^4.8.3",
-    "@worldplay/shared": "file:../shared"
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

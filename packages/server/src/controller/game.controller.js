@@ -1,3 +1,6 @@
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
 // game.controller.js
 import gameService from '../services/game.service.js';
 
@@ -138,6 +141,102 @@ const gameController = {
     } catch (error) {
       console.error('Feed Error:', error);
       res.status(500).json({ error: 'שגיאה בטעינת הפיד' });
+    }
+  },
+  async getHistory(req, res) {
+    try {
+      const userId = req.user.id;
+      const data = await gameService.getGameHistory(userId);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  async togglePin(req, res) {
+    try {
+      const userId = req.user.id;
+      const { gameId } = req.params;
+      const data = await gameService.togglePin(userId, gameId);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      if (error.message === 'Activity not found') {
+        return res.status(404).json({ error: 'המשחק לא נמצא בהיסטוריה' });
+      }
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  async migrateActivities(req, res) {
+    try {
+      const participants = await prisma.gameParticipant.findMany({
+        select: {
+          userId: true,
+          gameId: true,
+          role: true,
+          joinedAt: true,
+        },
+      });
+
+      let created = 0;
+      for (const p of participants) {
+        await prisma.userGameActivity.upsert({
+          where: {
+            userId_gameId: { userId: p.userId, gameId: p.gameId },
+          },
+          update: {},
+          create: {
+            userId: p.userId,
+            gameId: p.gameId,
+            relationType: p.role,
+            isPinned: false,
+            isDeleted: false,
+          },
+        });
+        created++;
+      }
+
+      res.json({ success: true, migrated: created });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+  async getGameViewers(req, res) {
+    try {
+      const { gameId } = req.params;
+      const userId = req.user.id;
+      const data = await gameService.getGameViewers(gameId, userId);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  async seedViewLogs(req, res) {
+    try {
+      // מוסיפים צפיות למשחק 550572a6
+      await prisma.viewLog.createMany({
+        data: [
+          // עוקב של viewer2 ✅
+          {
+            userId: '36d7c267-0e50-42f5-b3c9-7e057d57bb0b',
+            hostId: '36d7c267-0e50-42f5-b3c9-7e057d57bb0b',
+            gameId: '550572a6-d66b-4a2e-8050-a9c2fba8f498',
+            duration: 120,
+          },
+          // לא עוקב ✅
+          {
+            userId: 'c50dd91e-8412-4120-a9a3-a3c1b34ca00b',
+            hostId: '36d7c267-0e50-42f5-b3c9-7e057d57bb0b',
+            gameId: '550572a6-d66b-4a2e-8050-a9c2fba8f498',
+            duration: 60,
+          },
+        ],
+      });
+
+      res.json({ success: true, message: 'נתוני בדיקה נוצרו' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
   },
 };

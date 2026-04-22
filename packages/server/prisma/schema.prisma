@@ -45,6 +45,8 @@ model User {
   hostLogs         ViewLog[]         @relation("HostLogs")
   viewLogs         ViewLog[]         @relation("UserLogs")
 
+  gameActivities UserGameActivity[]
+
   followersCount   Int               @default(0) @map("followers_count")
   followingCount   Int               @default(0) @map("following_count")
 
@@ -147,6 +149,7 @@ model Game {
   finishedAt   DateTime?         @map("finished_at")
   status       GameStatus        @default(WAITING)
   startedAt    DateTime?         @map("started_at")
+  isPinned     Boolean           @default(false) @map("is_pinned")  // ← הוסיפי את זה
   participants GameParticipant[]
   host         User              @relation("HostGames", fields: [hostId], references: [id])
   moderator    User?             @relation("ModeratorGames", fields: [moderatorId], references: [id])
@@ -154,6 +157,7 @@ model Game {
   questions    Question[]
   userPoints   UserPoint[]
   viewLogs     ViewLog[]
+  gameActivities UserGameActivity[]
 
   @@map("games")
 }
@@ -250,6 +254,23 @@ model Transaction {
   userPoints    UserPoint[]
 
   @@map("transactions")
+}
+
+model UserGameActivity {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  gameId       String   @map("game_id")
+  relationType UserRole @default(VIEWER)
+  isPinned     Boolean  @default(false) @map("is_pinned")
+  isDeleted    Boolean  @default(false) @map("is_deleted")
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastViewedAt DateTime @updatedAt @map("last_viewed_at")
+
+  user User @relation(fields: [userId], references: [id])
+  game Game @relation(fields: [gameId], references: [id])
+
+  @@unique([userId, gameId])
+  @@map("user_game_activities")
 }
 
 enum CurrencyType {

@@ -2,7 +2,6 @@ import { PrismaClient } from '@prisma/client';
 import permissionsService from './permissions.service.js';
 import * as gameRules from '../services/validation.service.js';
 const prisma = new PrismaClient();
-import axios from 'axios';
 
 async function cancelOldGames(userId) {
   return await prisma.game.updateMany({
@@ -16,13 +15,9 @@ async function cancelOldGames(userId) {
 
 const gameService = {
   async createGame(userId, { title, description, moderatorId }) {
-    // בדיקה שהמארח פנוי
     await gameRules.validateHostIsAvailable(userId);
-
-    // ביטול משחקים ישנים - עכשיו זה ירוץ בוודאות
     await cancelOldGames(userId);
 
-    // טרנזקציה
     return await prisma.$transaction(async (tx) => {
       const newStream = await tx.stream.create({
         data: {
@@ -51,6 +46,15 @@ const gameService = {
         },
       });
 
+      // ✅ רישום פעילות למארח
+      await tx.userGameActivity.create({
+        data: {
+          userId: userId,
+          gameId: newGame.id,
+          relationType: 'HOST',
+        },
+      });
+
       return { ...newGame, streamId: newStream.id };
     });
   },
@@ -61,6 +65,7 @@ const gameService = {
       userId,
       role
     );
+
     if (eligibility.status === 'ALREADY_JOINED') {
       return { participant: eligibility.participant, alreadyJoined: true };
     }
@@ -68,6 +73,20 @@ const gameService = {
     const newParticipant = await prisma.gameParticipant.create({
       data: { gameId, userId, role, score: 0 },
     });
+
+    // ✅ רישום פעילות למשתתף
+    await prisma.userGameActivity.upsert({
+      where: {
+        userId_gameId: { userId, gameId },
+      },
+      update: {},
+      create: {
+        userId,
+        gameId,
+        relationType: role,
+      },
+    });
+
     return { alreadyJoined: false, participant: newParticipant };
   },
 
@@ -83,40 +102,6 @@ const gameService = {
       dataToUpdate.startedAt = now;
     } else if (newStatus === 'FINISHED') {
       dataToUpdate.finishedAt = now;
-
-      try {
-        // שליפת הנתונים כולל ה-streamId
-        const gameData = await prisma.game.findUnique({
-          where: { id: gameId },
-          select: { streamId: true },
-        });
-
-        if (gameData?.streamId) {
-          // 1. עדכון סטטוס הסטרים ב-DB ל-FINISHED
-          await prisma.stream.update({
-            where: { id: gameData.streamId },
-            data: { status: 'FINISHED', endedAt: now },
-          });
-
-          // 2. פקודה לשרת המדיה להרוג את ה-FFmpeg
-          const MEDIA_URL =
-            process.env.MEDIA_SERVER_INTERNAL_URL || 'http://media-server:8000';
-          console.log(
-            `🛑 Sending STOP to Media Server for stream: ${gameData.streamId}`
-          );
-
-          // אנחנו לא שמים await על ה-axios כדי לא לעכב את תגובת ה-DB למשתמש
-          axios
-            .post(`${MEDIA_URL}/live/stop/${gameData.streamId}`)
-            .catch(() =>
-              console.log('Media Server already cleaned up this stream.')
-            );
-        }
-      } catch {
-        console.error(
-          'Non-critical error during FINISH cleanup: stream cleanup may have already occurred'
-        );
-      }
     }
 
     return await prisma.game.update({
@@ -124,12 +109,15 @@ const gameService = {
       data: dataToUpdate,
     });
   },
+
   async getFollowedFeed(userId) {
     const following = await prisma.follow.findMany({
       where: { followerId: userId },
       select: { followingId: true },
     });
+
     const followingIds = following.map((f) => f.followingId);
+
     return await prisma.game.findMany({
       where: {
         hostId: { in: followingIds },
@@ -141,6 +129,88 @@ const gameService = {
       },
       orderBy: { createdAt: 'desc' },
     });
+  },
+
+  async getGameHistory(userId) {
+    const activities = await prisma.userGameActivity.findMany({
+      where: {
+        userId,
+        isDeleted: false,
+      },
+      include: {
+        game: {
+          include: {
+            host: { select: { id: true, username: true } },
+            userPoints: {
+              where: { userId },
+              select: { pointType: true, amount: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const pinned = activities.filter((a) => a.isPinned);
+    const notPinned = activities.filter((a) => !a.isPinned);
+    const combined = [...pinned, ...notPinned].slice(0, 10);
+
+    const withBreakdown = combined.map((a) => {
+      const breakdown = { TRIVIA: 0, DONATION: 0, BONUS: 0, GAME: 0 };
+      for (const point of a.game.userPoints) {
+        if (breakdown[point.pointType] !== undefined) {
+          breakdown[point.pointType] += Number(point.amount);
+        }
+      }
+      const total = Object.values(breakdown).reduce((sum, v) => sum + v, 0);
+      return { ...a, breakdown, total };
+    });
+
+    return {
+      all: withBreakdown,
+      asHost: withBreakdown.filter((a) => a.relationType === 'HOST'),
+      asPlayer: withBreakdown.filter((a) =>
+        ['PLAYER', 'VIEWER', 'MODERATOR'].includes(a.relationType)
+      ),
+    };
+  },
+
+  async togglePin(userId, gameId) {
+    const activity = await prisma.userGameActivity.findUnique({
+      where: { userId_gameId: { userId, gameId } },
+    });
+
+    if (!activity) throw new Error('Activity not found');
+
+    return await prisma.userGameActivity.update({
+      where: { userId_gameId: { userId, gameId } },
+      data: { isPinned: !activity.isPinned },
+    });
+  },
+
+  async getGameViewers(gameId, currentUserId) {
+    const viewLogs = await prisma.viewLog.findMany({
+      where: { gameId },
+      select: { userId: true },
+    });
+
+    const viewerIds = [...new Set(viewLogs.map((v) => v.userId))];
+
+    const follows = await prisma.follow.findMany({
+      where: {
+        followerId: currentUserId,
+        followingId: { in: viewerIds },
+      },
+      select: { followingId: true },
+    });
+
+    const followerIds = new Set(follows.map((f) => f.followingId));
+
+    return {
+      total: viewerIds.length,
+      followers: viewerIds.filter((id) => followerIds.has(id)).length,
+      casual: viewerIds.filter((id) => !followerIds.has(id)).length,
+    };
   },
 };
 

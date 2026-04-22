@@ -14,6 +14,7 @@ import ShopScreen from '../screens/ShopScreen';
 import GameScreen from '../screens/GameScreen';
 import HostTestScreen from './host_test';
 import InboxScreen from '../screens/InboxScreen';
+import HistoryScreen from '../screens/HistoryScreen';
 
 export default function Page() {
   const [user, setUser] = useState(null);
@@ -72,6 +73,15 @@ export default function Page() {
     );
   }
 
+  if (currentScreen === 'HISTORY') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#030712' }}>
+        {renderHeader('היסטוריית משחקים')}
+        <HistoryScreen />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -114,6 +124,13 @@ export default function Page() {
           onPress={() => setCurrentScreen('INBOX')}
         >
           <Text style={styles.btnText}>📩 דואר והתראות</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.menuBtn, { backgroundColor: '#a78bfa' }]}
+          onPress={() => setCurrentScreen('HISTORY')}
+        >
+          <Text style={styles.btnText}>📜 היסטוריית משחקים</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
