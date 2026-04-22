@@ -9,13 +9,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import PropTypes from 'prop-types';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { authService } from '../services/auth.service';
 import { connectSocket } from '../services/socket.service';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+WebBrowser.maybeCompleteAuthSession();
+
+// const API_URL = 'http://10.0.2.2:8080'; // אנדרואיד אמולטור — שני לIP שלך אם על מכשיר אמיתי
+const API_URL = 'https://hunter-obsessed-shield.ngrok-free.dev';
 
 const LoginScreen = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -36,6 +45,53 @@ const LoginScreen = ({ onLoginSuccess }) => {
       Alert.alert('שגיאת התחברות', error.message || 'פרטים שגויים');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      const redirectUrl = Linking.createURL('auth-success');
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${API_URL}/auth/google?redirect_uri=${encodeURIComponent(redirectUrl)}`,
+        redirectUrl
+      );
+      if (result.type === 'success' && result.url) {
+        const token = result.url.split('token=')[1];
+        if (token) await handleGoogleToken(token);
+        else {
+          Alert.alert('שגיאה', 'לא התקבל טוקן מגוגל');
+          setGoogleLoading(false);
+        }
+      } else {
+        setGoogleLoading(false);
+      }
+    } catch {
+      Alert.alert('שגיאה', 'לא ניתן לפתוח את דף גוגל');
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleToken = async (token) => {
+    try {
+      // שמירת token כמו בlogin רגיל
+      await AsyncStorage.setItem('userToken', token);
+
+      const response = await fetch(`${API_URL}/api/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const user = await response.json();
+      await connectSocket();
+      onLoginSuccess({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        token,
+      });
+    } catch {
+      Alert.alert('שגיאה', 'התחברות עם Google נכשלה');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -63,7 +119,7 @@ const LoginScreen = ({ onLoginSuccess }) => {
       />
 
       <TouchableOpacity
-        style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
+        style={[styles.loginBtn, loading && styles.btnDisabled]}
         onPress={handleLogin}
         disabled={loading}
       >
@@ -71,6 +127,24 @@ const LoginScreen = ({ onLoginSuccess }) => {
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.loginText}>כניסה</Text>
+        )}
+      </TouchableOpacity>
+
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>או</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      <TouchableOpacity
+        style={[styles.googleBtn, googleLoading && styles.btnDisabled]}
+        onPress={handleGoogleLogin}
+        disabled={googleLoading}
+      >
+        {googleLoading ? (
+          <ActivityIndicator color="#000" />
+        ) : (
+          <Text style={styles.googleText}>🔵 התחברות עם Google</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -116,8 +190,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  loginBtnDisabled: { opacity: 0.6 },
+  btnDisabled: { opacity: 0.6 },
   loginText: { color: '#000', fontWeight: 'bold', fontSize: 18 },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#444',
+  },
+  dividerText: {
+    color: '#888',
+    marginHorizontal: 10,
+    fontSize: 14,
+  },
+  googleBtn: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  googleText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
 });
 
 export default LoginScreen;
