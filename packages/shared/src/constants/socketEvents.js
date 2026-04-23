@@ -13,6 +13,11 @@ export const SOCKET_EVENTS = {
     PLACE_BET: 'game:place_bet',
     STATUS_UPDATE: 'game:status_update',
     ROOM_UPDATE: 'game:room_update',
+    INVITE_MODERATOR: 'game:invite_moderator',
+    ACCEPT_MODERATOR: 'game:accept_moderator',
+    REJECT_MODERATOR: 'game:reject_moderator',
+    MODERATOR_INVITATION: 'game:moderator_invitation',
+    MODERATOR_RESPONSE: 'game:moderator_response',
     ERROR: 'game:error',
   },
 

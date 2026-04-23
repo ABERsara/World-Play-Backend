@@ -173,4 +173,262 @@ export const registerGameHandlers = (io, socket) => {
       callback({ error: error.message });
     }
   });
+
+  // ===== MODERATOR INVITATION HANDLERS =====
+  const moderatorInvitations = new Map(); // gameId -> { moderatorId, hostId, timeout }
+
+  socket.on(SOCKET_EVENTS.GAME.INVITE_MODERATOR, async (payload, callback) => {
+    try {
+      const { gameId, moderatorUserId } = payload;
+      const hostId = socket.user.id;
+
+      // 1. Verify host owns the game
+      const game = await prisma.game.findUnique({
+        where: { id: gameId },
+      });
+
+      if (!game) {
+        return callback({ error: 'משחק לא נמצא' });
+      }
+
+      if (game.hostId !== hostId) {
+        return callback({
+          error: 'רק המארח יכול להזמין מנחה',
+        });
+      }
+
+      if (game.status !== 'WAITING') {
+        return callback({
+          error: 'אפשר להזמין מנחה רק כשהמשחק במצב WAITING',
+        });
+      }
+
+      // 2. Verify moderator exists
+      const moderator = await prisma.user.findUnique({
+        where: { id: moderatorUserId },
+      });
+
+      if (!moderator) {
+        return callback({ error: 'המנחה לא נמצא במערכת' });
+      }
+
+      // 3. Check if moderator is already in game
+      const existingParticipant = await prisma.gameParticipant.findUnique({
+        where: {
+          userId_gameId: {
+            userId: moderatorUserId,
+            gameId: gameId,
+          },
+        },
+      });
+
+      if (existingParticipant) {
+        return callback({
+          error: 'המנחה כבר במשחק זה',
+        });
+      }
+
+      // 4. Create invitation and set 60-second timeout
+      const invitationId = `inv_${Date.now()}`;
+      let timeout;
+
+      timeout = setTimeout(() => {
+        // Auto-reject after 60 seconds
+        moderatorInvitations.delete(gameId);
+
+        const moderatorSocket = Array.from(io.sockets.sockets.values()).find(
+          (s) => s.user?.id === moderatorUserId
+        );
+
+        if (moderatorSocket) {
+          moderatorSocket.emit(SOCKET_EVENTS.GAME.MODERATOR_RESPONSE, {
+            gameId,
+            status: 'REJECTED',
+            reason: 'timeout',
+            timestamp: new Date(),
+          });
+        }
+
+        // Notify host of timeout
+        const hostSocket = io.sockets.sockets.get(socket.id);
+        if (hostSocket) {
+          hostSocket.emit(SOCKET_EVENTS.GAME.MODERATOR_RESPONSE, {
+            gameId,
+            status: 'REJECTED',
+            reason: 'moderator_timeout',
+            moderatorId: moderatorUserId,
+            timestamp: new Date(),
+          });
+        }
+
+        logger.info(
+          `⏱️ Moderator invitation timeout for game ${gameId}, moderator ${moderatorUserId}`
+        );
+      }, 60000); // 60 seconds
+
+      moderatorInvitations.set(gameId, {
+        invitationId,
+        moderatorId: moderatorUserId,
+        hostId,
+        timeout,
+        createdAt: new Date(),
+      });
+
+      // 5. Emit invitation to moderator
+      const moderatorSocket = Array.from(io.sockets.sockets.values()).find(
+        (s) => s.user?.id === moderatorUserId
+      );
+
+      if (!moderatorSocket) {
+        moderatorInvitations.delete(gameId);
+        clearTimeout(timeout);
+        return callback({
+          error: 'המנחה לא מחובר כרגע',
+        });
+      }
+
+      moderatorSocket.emit(SOCKET_EVENTS.GAME.MODERATOR_INVITATION, {
+        gameId,
+        invitationId,
+        hostId,
+        hostName: socket.user.username,
+        gameTitle: game.title,
+        timeout: 60, // seconds
+        timestamp: new Date(),
+      });
+
+      callback({ success: true, invitationId });
+
+      logger.info(
+        `✉️ Moderator invitation sent for game ${gameId} to ${moderator.username}`
+      );
+    } catch (error) {
+      console.error('Socket invite moderator error:', error);
+      callback({ error: `שגיאה: ${error.message}` });
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.GAME.ACCEPT_MODERATOR, async (payload, callback) => {
+    try {
+      const { gameId } = payload;
+      const moderatorId = socket.user.id;
+
+      // 1. Verify invitation exists
+      const invitation = moderatorInvitations.get(gameId);
+
+      if (!invitation) {
+        return callback({
+          error: 'ההזמנה לא נמצאה או פגה',
+        });
+      }
+
+      if (invitation.moderatorId !== moderatorId) {
+        return callback({
+          error: 'ההזמנה לא מתייחסת אליך',
+        });
+      }
+
+      // 2. Clear timeout
+      clearTimeout(invitation.timeout);
+      moderatorInvitations.delete(gameId);
+
+      // 3. Create GameParticipant with MODERATOR role
+      const participant = await prisma.gameParticipant.create({
+        data: {
+          gameId,
+          userId: moderatorId,
+          role: 'MODERATOR',
+          score: 0,
+        },
+      });
+
+      // 4. Join socket room
+      socket.join(gameId);
+      logger.socketJoin(socket.user, gameId);
+
+      // 5. Broadcast update to game room
+      io.to(gameId).emit(SOCKET_EVENTS.GAME.ROOM_UPDATE, {
+        type: 'MODERATOR_ACCEPTED',
+        userId: moderatorId,
+        username: socket.user.username,
+        role: 'MODERATOR',
+        timestamp: new Date(),
+      });
+
+      // 6. Notify host of acceptance
+      const hostSocket = Array.from(io.sockets.sockets.values()).find(
+        (s) => s.user?.id === invitation.hostId
+      );
+
+      if (hostSocket) {
+        hostSocket.emit(SOCKET_EVENTS.GAME.MODERATOR_RESPONSE, {
+          gameId,
+          status: 'ACCEPTED',
+          moderatorId,
+          moderatorName: socket.user.username,
+          timestamp: new Date(),
+        });
+      }
+
+      callback({ success: true, participant });
+
+      logger.info(
+        `✅ Moderator ${socket.user.username} accepted invitation for game ${gameId}`
+      );
+    } catch (error) {
+      console.error('Socket accept moderator error:', error);
+      callback({ error: `שגיאה: ${error.message}` });
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.GAME.REJECT_MODERATOR, async (payload, callback) => {
+    try {
+      const { gameId } = payload;
+      const moderatorId = socket.user.id;
+
+      // 1. Verify invitation exists
+      const invitation = moderatorInvitations.get(gameId);
+
+      if (!invitation) {
+        return callback({
+          error: 'ההזמנה לא נמצאה או פגה',
+        });
+      }
+
+      if (invitation.moderatorId !== moderatorId) {
+        return callback({
+          error: 'ההזמנה לא מתייחסת אליך',
+        });
+      }
+
+      // 2. Clear timeout
+      clearTimeout(invitation.timeout);
+      moderatorInvitations.delete(gameId);
+
+      // 3. Notify host of rejection
+      const hostSocket = Array.from(io.sockets.sockets.values()).find(
+        (s) => s.user?.id === invitation.hostId
+      );
+
+      if (hostSocket) {
+        hostSocket.emit(SOCKET_EVENTS.GAME.MODERATOR_RESPONSE, {
+          gameId,
+          status: 'REJECTED',
+          moderatorId,
+          moderatorName: socket.user.username,
+          reason: 'rejected_by_moderator',
+          timestamp: new Date(),
+        });
+      }
+
+      callback({ success: true });
+
+      logger.info(
+        `❌ Moderator ${socket.user.username} rejected invitation for game ${gameId}`
+      );
+    } catch (error) {
+      console.error('Socket reject moderator error:', error);
+      callback({ error: `שגיאה: ${error.message}` });
+    }
+  });
 };
