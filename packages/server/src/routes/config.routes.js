@@ -5,8 +5,10 @@ const router = express.Router();
 router.get('/media-server', (req, res) => {
   // תמיד מחזיר את כתובת הרשת המקומית עבור לקוחות מובייל
   // זה יעבוד גם בדפדפן וגם באפליקציה
-  const url =
-    process.env.MOBILE_MEDIA_SERVER_URL || 'http://192.168.33.17:10007';
+  const url = process.env.MOBILE_MEDIA_SERVER_URL;
+  if (!url) {
+    return res.status(500).json({ error: 'Media server URL not configured' });
+  }
 
   res.json({
     url: url,

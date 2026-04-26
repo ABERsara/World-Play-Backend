@@ -26,7 +26,6 @@ export const authenticateToken = (req, res, next) => {
       id: userId, // וידוא שיש תמיד שדה id
     };
 
-    console.log('✅ Token verified for user:', userId);
     next();
   } catch (error) {
     console.error('❌ Authentication Error:', error.message);

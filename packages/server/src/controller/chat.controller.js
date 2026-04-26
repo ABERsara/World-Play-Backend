@@ -2,7 +2,7 @@ import chatService from '../services/chat.service.js';
 
 export const getChatHistory = async (req, res) => {
   const { otherUserId } = req.params;
-  const myUserId = req.query.myUserId;
+  const myUserId = req.user.id;
 
   if (!myUserId || !otherUserId) {
     return res
@@ -26,7 +26,8 @@ export const getChatHistory = async (req, res) => {
 };
 
 export const sendMessageAPI = async (req, res) => {
-  const { senderId, receiverId, messageText } = req.body;
+  const senderId = req.user.id;
+  const { receiverId, messageText } = req.body;
 
   if (!senderId || !receiverId || !messageText) {
     return res

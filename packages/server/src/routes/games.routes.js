@@ -27,10 +27,9 @@ router.get('/history', gameController.getHistory);
 router.patch('/:gameId/pin', gameController.togglePin);
 
 router.post('/migrate-activities', gameController.migrateActivities);
+router.post('/seed-viewlogs', gameController.seedViewLogs);
 
 // GET /api/games/:gameId/viewers
 router.get('/:gameId/viewers', gameController.getGameViewers);
-
-router.post('/seed-viewlogs', gameController.seedViewLogs);
 
 export default router;

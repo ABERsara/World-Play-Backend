@@ -3,12 +3,13 @@ import { registerGameHandlers } from '../sockets/game.handler.js';
 import { socketAuth } from '../middleware/socketAuth.js';
 import gameService from './game.service.js';
 import { PrismaClient } from '@prisma/client';
+import corsOptions from '../config/corsOptions.js';
 
 const prisma = new PrismaClient();
 
 export const initializeSocketIO = (httpServer) => {
   const io = new Server(httpServer, {
-    cors: { origin: '*', methods: ['GET', 'POST'] },
+    cors: { ...corsOptions, methods: ['GET', 'POST'] },
   });
 
   io.use(socketAuth);

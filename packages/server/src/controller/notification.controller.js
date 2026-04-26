@@ -4,7 +4,7 @@ import notificationService from '../services/notification.service.js';
  * @route GET /api/notifications
  */
 export const getMyNotifications = async (req, res) => {
-  const userId = req.user?.id || req.query.userId;
+  const userId = req.user?.id;
   const { filter } = req.query;
 
   if (!userId) return res.status(400).json({ message: 'User ID is required' });

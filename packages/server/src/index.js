@@ -15,7 +15,7 @@ import notificationRoutes from './routes/notification.routes.js';
 import configRoutes from './routes/config.routes.js';
 import statusRoutes from './routes/status.routes.js';
 import userAnswerRoutes from './routes/userAnswer.routes.js';
-// import corsOptions from './config/corsOptions.js';
+import corsOptions from './config/corsOptions.js';
 import { initializeSocketIO } from './services/socket.service.js';
 
 import paymentRoutes from './routes/payment.routes.js';
@@ -38,12 +38,7 @@ app.post(
 
 // --- Middleware ---
 app.use(express.json());
-app.use(
-  cors({
-    origin: '*', // לזמן הפיתוח, כדי לשלול חסימות
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 
 // --- Routes ---
 app.use('/', statusRoutes); // דף הבית של ה-API

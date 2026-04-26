@@ -141,7 +141,6 @@ export const registerStreamHandlers = (io, socket) => {
         }
       }
 
-      console.log('DEBUG FINAL OBJECT:', actualData);
 
       // שינוי ל-let כי אנחנו עשויים לעדכן את rtpParameters
       let { transportId, kind, rtpParameters, streamId } = actualData || {};
