@@ -1,10 +1,10 @@
+// מטפל בשמירת כרטיסי אשראי (דרך Stripe token) ויצירת טרנזקציות
 import financeService from '../services/finance.service.js';
 
 const financeController = {
-  // POST /api/finance/card
   async addCreditCard(req, res) {
     try {
-      const userId = req.user.id; // מגיע מה-Auth Middleware
+      const userId = req.user.id;
       const { token, last4Digits, expDate, cvv, tz } = req.body;
 
       if (!token || !last4Digits || !expDate) {
@@ -28,7 +28,6 @@ const financeController = {
     }
   },
 
-  // POST /api/finance/transaction
   async startTransaction(req, res) {
     try {
       const userId = req.user.id;

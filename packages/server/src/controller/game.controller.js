@@ -1,11 +1,10 @@
+// ניהול מחזור חיי המשחק — יצירה, הצטרפות, עדכון סטטוס, פיד והיסטוריה
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
-// game.controller.js
 import gameService from '../services/game.service.js';
 
 const gameController = {
-  // POST /api/games
   async createGame(req, res) {
     try {
       const userId = req.user.id;
@@ -17,7 +16,6 @@ const gameController = {
         });
       }
 
-      // קריאה לסרוויס (שעכשיו ייצר גם את הסטרים לבד)
       const game = await gameService.createGame(userId, {
         title,
         description,
@@ -28,7 +26,7 @@ const gameController = {
     } catch (error) {
       console.error('Create Game Error:', error);
 
-      // טיפול בשגיאות מפתח זר (P2003) - נשאר רלוונטי רק למנחה
+      // שגיאת מפתח זר ב-Prisma (P2003)
       if (error.code === 'P2003') {
         const fieldName = error.meta?.field_name || '';
 
@@ -43,7 +41,6 @@ const gameController = {
     }
   },
 
-  // PUT /api/games/:id/status
   async updateStatus(req, res) {
     try {
       const { id } = req.params;
@@ -78,18 +75,16 @@ const gameController = {
       }
       res.status(200).json({ message: 'סטטוס המשחק עודכן', game: updatedGame });
     } catch (error) {
-      console.error('Update Status Error:', error); // הוספת שימוש במשתנה error
+      console.error('Update Status Error:', error);
       res.status(500).json({ error: 'שגיאה בעדכון הסטטוס' });
     }
   },
 
-  // POST /api/games/:id/join
   async joinGame(req, res) {
     try {
-      const { id } = req.params; // Game ID
+      const { id } = req.params;
       const userId = req.user.id;
       const { role } = req.body;
-      // יש לוודא שה-role שנשלח הוא אחד מהערכים ב-Enum UserRole
       const validRoles = ['PLAYER', 'VIEWER', 'MODERATOR', 'HOST', 'LIVE'];
       const assignedRole = role && validRoles.includes(role) ? role : 'PLAYER';
 
@@ -115,7 +110,6 @@ const gameController = {
       if (error.message.includes('Unauthorized')) {
         return res.status(403).json({ error: error.message });
       }
-      // 2. שגיאות קונפליקט (מנסה תפקיד כפול, או משחק במקביל)
       if (
         error.message.includes('Conflict') ||
         error.message.includes('already playing') ||
@@ -124,7 +118,6 @@ const gameController = {
         return res.status(409).json({ error: error.message });
       }
 
-      // 3. שגיאות לוגיות (משחק סגור)
       if (error.message.includes('Cannot join')) {
         return res.status(400).json({ error: error.message });
       }
@@ -214,17 +207,14 @@ const gameController = {
 
   async seedViewLogs(req, res) {
     try {
-      // מוסיפים צפיות למשחק 550572a6
       await prisma.viewLog.createMany({
         data: [
-          // עוקב של viewer2 ✅
           {
             userId: '36d7c267-0e50-42f5-b3c9-7e057d57bb0b',
             hostId: '36d7c267-0e50-42f5-b3c9-7e057d57bb0b',
             gameId: '550572a6-d66b-4a2e-8050-a9c2fba8f498',
             duration: 120,
           },
-          // לא עוקב ✅
           {
             userId: 'c50dd91e-8412-4120-a9a3-a3c1b34ca00b',
             hostId: '36d7c267-0e50-42f5-b3c9-7e057d57bb0b',

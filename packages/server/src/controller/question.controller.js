@@ -1,6 +1,4 @@
-// src/controller/question.controller.js
-// ✅ עדכון סופי: אינטגרציה מלאה עם סנכרון ארנק וניקוד בזמן אמת
-
+// ניהול שאלות במשחק — יצירה, סגירה עם חלוקת תגמולים וסנכרון ארנקים בזמן אמת
 import questionService from '../services/question.service.js';
 import {
   syncUserBalances,
@@ -9,16 +7,11 @@ import {
 } from '../utils/socketHelpers.js';
 
 const questionController = {
-  /**
-   * POST /api/questions
-   * הוספת שאלה חדשה למשחק ושידור לכל המשתתפים
-   */
   async addQuestion(req, res) {
     try {
       const userId = req.user.id;
       const { gameId, questionText, rewardType, options } = req.body;
 
-      // ולידציות בסיסיות
       if (!gameId || !questionText) {
         return res.status(400).json({
           error: 'חסרים שדות חובה: gameId, questionText',
@@ -31,14 +24,12 @@ const questionController = {
         });
       }
 
-      // יצירת השאלה ב-DB דרך ה-Service
       const newQuestion = await questionService.createQuestion(gameId, userId, {
         questionText,
         rewardType,
         options,
       });
 
-      // שידור השאלה החדשה לכל המשתתפים בחדר המשחק
       const io = req.app.get('io');
       if (io) {
         io.to(gameId).emit('game:new_question', {
@@ -75,10 +66,6 @@ const questionController = {
     }
   },
 
-  /**
-   * PATCH /api/questions/:id/resolve
-   * סגירת שאלה, חלוקת כספים (85/15 או פרופורציונלי) וסנכרון ארנקים וניקוד
-   */
   async resolveQuestion(req, res) {
     try {
       const { id: questionId } = req.params;
@@ -91,9 +78,6 @@ const questionController = {
           .json({ error: 'חובה לשלוח optionId (התשובה הנכונה)' });
       }
 
-      console.log(`[CONTROLLER] Resolving question ${questionId}...`);
-
-      // ביצוע הלוגיקה הכלכלית ב-Service (כולל Prisma Transaction)
       const result = await questionService.resolveQuestion(
         questionId,
         userId,
@@ -104,14 +88,12 @@ const questionController = {
       const gameId = result.question.gameId;
 
       if (io) {
-        // --- לוגיקת סנכרון Real-time מורחבת (ארנק + ניקוד) ---
-
-        // 1. אם זו שאלת "מי ינצח" - סנכרון מיידי למנצח שקיבל 85%
+        // סנכרון מנצח שאלת "מי ינצח" (85%)
         if (result.distribution?.winnerId) {
           await syncUserBalances(io, result.distribution.winnerId, gameId);
         }
 
-        // 2. עדכון יתרות לכל שאר המשתתפים שהושפעו (בונוס 125%, חלוקת קופה רגילה וכו')
+        // עדכון יתרות לכל המשתתפים שהושפעו (בונוס 125%, חלוקת קופה רגילה)
         const affectedUsers = [];
 
         if (result.distribution?.distributions) {
@@ -126,20 +108,17 @@ const questionController = {
           );
         }
 
-        // הסרת כפילויות וסנכרון לכל משתמש בנפרד
         const uniqueUsers = [...new Set(affectedUsers)];
         for (const uId of uniqueUsers) {
-          // סנכרון זה מעדכן ב-UI גם את הארנק וגם את הניקוד בזירה
+          // מעדכן גם ארנק וגם ניקוד בזירה
           await syncUserBalances(io, uId, gameId);
         }
 
-        // 3. עדכון המנחה (עמלת 15% או עמלת קופה רגילה)
+        // עדכון המנחה (עמלת 15% או עמלת קופה רגילה)
         await syncUserBalances(io, userId, gameId);
 
-        // 4. עדכון כללי של טבלת המובילים (Leaderboard) במשחק
         await syncGameScores(io, gameId);
 
-        // שידור הודעת סגירת שאלה כללית לחדר
         io.to(gameId).emit('game:question_resolved', {
           questionId,
           correctOptionId: optionId,
@@ -151,7 +130,6 @@ const questionController = {
           timestamp: new Date().toISOString(),
         });
 
-        // שידור אירוע כלכלי לתיעוד בלייב
         broadcastEconomyEvent(io, gameId, 'POT_DISTRIBUTED', {
           questionId,
           totalAmount: result.distribution?.totalPot || 0,
@@ -190,10 +168,6 @@ const questionController = {
     }
   },
 
-  /**
-   * GET /api/questions/:id
-   * שליפת פרטי שאלה בודדת
-   */
   async getQuestion(req, res) {
     try {
       const { id } = req.params;
@@ -208,10 +182,6 @@ const questionController = {
     }
   },
 
-  /**
-   * GET /api/games/:gameId/questions
-   * שליפת כל השאלות של משחק ספציפי
-   */
   async getGameQuestions(req, res) {
     try {
       const { gameId } = req.params;

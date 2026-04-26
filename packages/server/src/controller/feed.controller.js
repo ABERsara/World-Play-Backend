@@ -4,8 +4,6 @@ export const getLiveFeed = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // קריאה לשירות כדי לקבל את הנתונים
-    // אנו מעבירים את ה-userId למקרה שנצטרך אותו בלוגיקה (גם אם כרגע לא משתמשים בו)
     const liveStreams = await feedService.fetchActiveStreams(userId);
 
     res.status(200).json(liveStreams);

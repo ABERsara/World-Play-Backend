@@ -1,4 +1,4 @@
-// stream.controller.js
+// ניהול מחזור חיי הסטרים — הפעלה, עצירה, חידוש וחישוב זמן השהייה המצטבר
 import streamService from '../services/stream.service.js';
 import gameService from '../services/game.service.js';
 import pkg from '@prisma/client';
@@ -11,22 +11,19 @@ const streamController = {
     const { streamId } = req.params;
 
     try {
-      console.log(`🚀 Start request received for stream: ${streamId}`);
+      console.log(`Start request received for stream: ${streamId}`);
 
-      // *** שינוי קריטי: שחרר את ה-Response מיד ***
+      // Response נשלח לפני await — Service ממשיך ברקע
       res.status(200).json({
         message: 'Stream ingestion started',
         streamId,
       });
 
-      // *** עכשיו תן ל-Service לעבוד ברקע ***
-      // זה ימשיך לרוץ גם אחרי שה-Response נשלח
       await streamService.startStream(streamId, req);
 
       console.log(`✅ Stream ${streamId} processing completed`);
     } catch (error) {
-      console.error(`❌ Controller Error: ${error.message}`);
-      // אם ה-Response כבר נשלח, רק לוג את השגיאה
+      console.error(`Controller Error: ${error.message}`);
       if (!res.headersSent) {
         res.status(500).json({ error: error.message });
       }
@@ -132,11 +129,11 @@ const streamController = {
       });
 
       console.log(
-        `✅ DB Update: Stream ${streamId} is ${status}. Total pause: ${updatedStream.accumulatedPauseMs}ms`
+        `DB Update: Stream ${streamId} is ${status}. Total pause: ${updatedStream.accumulatedPauseMs}ms`
       );
       res.json({ success: true, stream: updatedStream });
     } catch (error) {
-      console.error('❌ Controller Error (Status Update):', error.message);
+      console.error('Controller Error (Status Update):', error.message);
       res.status(500).json({ error: error.message });
     }
   },
@@ -176,7 +173,7 @@ const streamController = {
           });
 
           req.app.get('io').to(streamId).emit('stream_resumed', { streamId });
-          console.log(`⏰ Auto-Resume: Stream ${streamId} is back LIVE.`);
+          console.log(`Auto-Resume: Stream ${streamId} is back LIVE.`);
         }
       }, PAUSE_TIME_SECONDS * 1000);
 

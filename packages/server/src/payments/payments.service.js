@@ -1,3 +1,4 @@
+// יצירת Stripe Payment Sheet לרכישת מטבעות — כולל יצירת customer אוטומטית אם חדש
 import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 
