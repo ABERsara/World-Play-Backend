@@ -3,15 +3,15 @@ services:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: worldplaydb
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d worldplaydb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,7 +26,6 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
-      - "5556:5556"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
     depends_on:
@@ -46,22 +45,10 @@ services:
       - "10000-10010:10000-10010/udp"
       - "11000-11020:11000-11020/udp" 
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
-      - ANNOUNCED_IP=${ANNOUNCED_IP} 
+      - DATABASE_URL=${DATABASE_URL}
+      - ANNOUNCED_IP=${ANNOUNCED_IP}
       - RTC_MIN_PORT=10000       # חשוב: אומר למדיה סרבר להשתמש בטווח הזה
       - RTC_MAX_PORT=10010
 
-  prisma-studio:
-    build:
-      context: .
-      dockerfile: packages/server/Dockerfile
-    command: npx prisma studio --port 5556 --browser none --hostname 0.0.0.0
-    ports:
-      - "5557:5556"
-    env_file: .env
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
-    depends_on:
-      - db
 volumes:
   postgres_data:
