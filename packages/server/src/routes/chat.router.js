@@ -1,3 +1,4 @@
+// נתיבי צ'אט — היסטוריית הודעות ושליחה בין משתמשים
 import { Router } from 'express';
 import {
   getChatHistory,

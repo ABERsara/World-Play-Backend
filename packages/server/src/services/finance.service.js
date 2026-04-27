@@ -1,8 +1,20 @@
+/**
+ * finance.service.js
+ *
+ * שכבת השירות לניהול תשלומים וכרטיסי אשראי.
+ * מטפל בשמירת אמצעי תשלום ויצירת רשומות טרנזקציה.
+ *
+ * IMPORTANT: קובץ זה עובד אך ורק עם טוקנים מספק התשלומים (לא נתוני כרטיס גולמיים).
+ * CVV לעולם אינו נשמר — מפר תקן PCI-DSS.
+ *
+ * מתקשר עם: Prisma → CreditCard, Transaction
+ * תלוי ב:   ספק תשלומים חיצוני (מחזיר token + last4Digits)
+ * משמש את:  payment.controller.js
+ */
 import prisma from '../config/prisma.js';
 
 const financeService = {
-  // 1. שמירת כרטיס אשראי (רק טוקן ו-4 ספרות!)
-  async saveCreditCard(userId, { token, last4Digits, expDate, cvv, tz }) {
+  async saveCreditCard(userId, { token, last4Digits, expDate, tz }) {
     return await prisma.creditCard.create({
       data: {
         userId,
@@ -10,13 +22,11 @@ const financeService = {
         last4Digits,
         expDate,
         isDeleted: false,
-        cvv: cvv || null,
         tz: tz || null,
       },
     });
   },
 
-  // 2. יצירת טרנזקציה חדשה (סטטוס PENDING)
   async createTransaction(
     userId,
     { type, amount, description, paymentMethod, last4Digits }
@@ -24,28 +34,15 @@ const financeService = {
     return await prisma.transaction.create({
       data: {
         userId,
-        type, // ENUM: PURCHASE, GIFT, etc.
+        type,
         amount,
         description,
         paymentMethod,
         last4Digits,
-        status: 'PENDING', // תמיד מתחיל בהמתנה
+        status: 'PENDING',
       },
     });
   },
-
-  // 3. הוספת נקודות ליוזר (פונקציה פנימית)
-  // נקרא לזה כשהטרנזקציה תהפוך ל-SUCCESS
-  // async addUserPoints(userId, amount, pointType, transactionId = null) {
-  //   return await prisma.userPoint.create({
-  //     data: {
-  //       userId,
-  //       amount,
-  //       pointType, // ENUM: GAME, BONUS, PURCHASE...
-  //       transactionId // אופציונלי: קישור לטרנזקציה
-  //     }
-  //   });
-  // }
 };
 
 export default financeService;

@@ -15,10 +15,8 @@ RUN npm install
 COPY packages/shared/ ./packages/shared/
 COPY packages/server/ ./packages/server/
 
-RUN npx prisma generate --schema=./packages/server/prisma/schema.prisma
-
 WORKDIR /usr/src/app/packages/server
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
+CMD ["sh", "-c", "npx prisma generate --schema=./prisma/schema.prisma && npx prisma migrate deploy && npm start"]

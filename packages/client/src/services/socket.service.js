@@ -1,3 +1,16 @@
+/**
+ * socket.service.js (client)
+ *
+ * ניהול חיבורי Socket.IO מהצד הלקוח — שני חיבורים נפרדים:
+ *   appSocket   — לשרת הראשי (משחק, התראות, צ'אט)
+ *   mediaSocket — לשרת המדיה (סטרימינג וידאו/אודיו)
+ *
+ * connectMediaSocket משתמש ב-promise dedup כדי למנוע חיבורים כפולים במקביל.
+ * emitPromise / emitMediaPromise עוטפים emit ב-Promise לשימוש async/await נוח.
+ *
+ * תלוי ב:   auth.service.js (טוקן לאימות), EXPO_PUBLIC_MEDIA_SERVER_URL (ENV)
+ * משמש את:  כל מסך שצריך לשלוח/לקבל אירועי realtime
+ */
 import { io } from 'socket.io-client';
 import { authService } from './auth.service';
 import { Platform } from 'react-native';
@@ -10,7 +23,6 @@ let mediaSocketInstance = null;
 let mediaSocketConnectPromise = null;
 
 const getMediaServerUrl = () => {
-  // הוא יקח את הכתובת ישירות מה-ENV שהגדרת בשורש הפרויקט
   const envUrl = process.env.EXPO_PUBLIC_MEDIA_SERVER_URL;
 
   if (Platform.OS === 'android') {
@@ -30,9 +42,6 @@ export const connectAppSocket = async () => {
     transports: ['polling', 'websocket'],
     reconnection: true,
   });
-  appSocketInstance.on('connect', () =>
-    console.log('✅ App Socket connected!')
-  );
   return appSocketInstance;
 };
 

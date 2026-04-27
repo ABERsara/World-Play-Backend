@@ -1,8 +1,6 @@
+// ניהול התראות מערכת — שליפה, סימון כנקרא ויצירה פנימית מ-services
 import notificationService from '../services/notification.service.js';
-/**
- * @desc קבלת כל ההתראות של המשתמש
- * @route GET /api/notifications
- */
+
 export const getMyNotifications = async (req, res) => {
   const userId = req.user?.id;
   const { filter } = req.query;
@@ -26,10 +24,6 @@ export const getMyNotifications = async (req, res) => {
   }
 };
 
-/**
- * @desc סימון התראה כ"נקראה"
- * @route PUT /api/notifications/:notificationId/read
- */
 export const markAsRead = async (req, res) => {
   const { notificationId } = req.params;
 
@@ -46,10 +40,6 @@ export const markAsRead = async (req, res) => {
   }
 };
 
-/**
- * @desc פונקציה לבדיקות (Postman) - יצירת התראה ידנית
- * @route POST /api/notifications/create
- */
 export const createTestNotification = async (req, res) => {
   const { userId, content, type } = req.body;
 
@@ -69,11 +59,6 @@ export const createTestNotification = async (req, res) => {
   }
 };
 
-/**
- * פונקציית עזר פנימית (לא Route)
- * אם את צריכה להשתמש בה בקבצים אחרים, עדיף לייבא ישירות את השירות,
- * אבל השארתי לך אותה כאן למקרה שאת משתמשת בה בקוד קיים.
- */
 export const createSystemNotification = async (userId, type, content) => {
   try {
     await notificationService.createNewNotification(userId, type, content);

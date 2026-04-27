@@ -1,10 +1,8 @@
-import userService from '../services/user.service.js'; // ייבוא הסרביס
+// ניהול פרופיל המשתמש — שליפת יתרה וניקוד, עדכון פרטים אישיים
+import userService from '../services/user.service.js';
 
-// packages/server/src/controllers/user.controller.js
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
-
-// packages/server/src/controllers/user.controller.js
 
 export const getMe = async (req, res) => {
   try {
@@ -13,9 +11,8 @@ export const getMe = async (req, res) => {
     const userProfile = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        walletBalance: true, // זה השם הנכון ב-Schema שלך!
+        walletBalance: true,
         participations: {
-          // שימי לב: ב-Schema זה נקרא participations ולא participants
           where: { game: { status: 'ACTIVE' } },
           select: { gameId: true, score: true },
         },
@@ -25,12 +22,10 @@ export const getMe = async (req, res) => {
     if (!userProfile) return res.status(404).json({ message: 'משתמש לא נמצא' });
 
     const scoresByGame = {};
-    // המרת רשימת ההשתתפויות למפת ניקוד
     userProfile.participations.forEach((p) => {
       scoresByGame[p.gameId] = Number(p.score);
     });
 
-    // החזרת הנתונים לקליינט במבנה שהוא מכיר
     res.json({
       walletCoins: Number(userProfile.walletBalance),
       scoresByGame: scoresByGame,
@@ -40,17 +35,15 @@ export const getMe = async (req, res) => {
     res.status(500).json({ message: 'שגיאה בשרת: ' + error.message });
   }
 };
-// --- עדכון פרטים (PUT /me) ---
+
 export const updateMe = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // שימוש בסרביס לעדכון
     const updatedUser = await userService.updateUserProfile(userId, req.body);
 
     res.json({ message: 'הפרטים עודכנו בהצלחה', user: updatedUser });
   } catch (error) {
-    // טיפול בשגיאה הספציפית שהגדרנו בסרביס
     if (error.message === 'PHONE_EXISTS') {
       return res
         .status(400)

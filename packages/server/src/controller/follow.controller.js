@@ -1,4 +1,4 @@
-// controllers/follow.controller.js
+// ניהול קשרי עוקבים בין משתמשים — בסיס לפיד ולחיפוש חברתי
 import followService from '../services/follow.service.js';
 
 const followController = {
@@ -15,7 +15,6 @@ const followController = {
         data: result,
       });
     } catch (error) {
-      // שימוש ב-error כדי לעבור את ה-Linter
       console.error('[FOLLOW_ERROR]', error.message);
       return res.status(400).json({
         success: false,
@@ -35,7 +34,6 @@ const followController = {
         data: followers,
       });
     } catch (error) {
-      // הדפסה ללוג כדי שהמשתנה יהיה "בשימוש"
       console.error('[GET_FOLLOWERS_ERROR]', error.message);
       return res.status(500).json({
         success: false,

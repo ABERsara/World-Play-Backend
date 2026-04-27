@@ -1,3 +1,4 @@
+// נתיבי התראות — שליפה, סימון כנקרא ויצירה ידנית לבדיקות
 import { Router } from 'express';
 import {
   getMyNotifications,

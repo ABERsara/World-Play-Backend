@@ -1,3 +1,4 @@
+// אימות JWT לכל בקשה — תומך בשני פורמטים של token payload (id או userId)
 import jwt from 'jsonwebtoken';
 
 export const authenticateToken = (req, res, next) => {
@@ -8,7 +9,6 @@ export const authenticateToken = (req, res, next) => {
     return res.status(401).json({ message: 'גישה נדחתה: לא סופק טוקן' });
   }
 
-  // חילוץ הטוקן (הסרת המילה Bearer)
   const token = authHeader.split(' ')[1];
 
   if (!token) {
@@ -18,19 +18,18 @@ export const authenticateToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // 🔥 התוספת החשובה: תמיכה בשני פורמטים של JWT
+    // תמיכה בשני פורמטים של JWT (id או userId)
     const userId = decoded.id || decoded.userId;
 
     req.user = {
       ...decoded,
-      id: userId, // וידוא שיש תמיד שדה id
+      id: userId,
     };
 
     next();
   } catch (error) {
     console.error('❌ Authentication Error:', error.message);
 
-    // זיהוי מיוחד אם הטוקן פג תוקף
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         message: 'טוקן פג תוקף',

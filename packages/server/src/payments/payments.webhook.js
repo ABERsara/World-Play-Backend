@@ -1,3 +1,4 @@
+// Webhook של Stripe — מאזין לאישור תשלום, מעדכן ארנק ושולח התראה בזמן אמת
 import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 
@@ -5,7 +6,7 @@ const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const handleWebhook = async (req, res) => {
-  console.log('🔔 Webhook hit! Event type:', req.body.type);
+  console.log('Webhook hit! Event type:', req.body.type);
   const sig = req.headers['stripe-signature'];
 
   let event;
@@ -16,7 +17,7 @@ export const handleWebhook = async (req, res) => {
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error('❌ Webhook signature failed:', err.message);
+    console.error('Webhook signature failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
   console.log(
@@ -29,12 +30,12 @@ export const handleWebhook = async (req, res) => {
     const userId = intent.metadata?.userId;
     const baseCoins = Number(intent.metadata?.coins);
 
-    console.log('🔍 WEBHOOK RECEIVED:');
+    console.log('WEBHOOK RECEIVED:');
     console.log('userId:', userId);
     console.log('coins:', baseCoins);
 
     if (!userId || isNaN(baseCoins)) {
-      console.error('❌ Missing or invalid metadata');
+      console.error('Missing or invalid metadata');
       return res.status(400).json({ error: 'Missing required metadata' });
     }
 
@@ -90,22 +91,18 @@ export const handleWebhook = async (req, res) => {
       });
 
       console.log(
-        `✅ SUCCESS: User ${userId} now has ${result.walletBalance} coins`
+        `SUCCESS: User ${userId} now has ${result.walletBalance} coins`
       );
       const io = req.app.get('io');
       if (io) {
-        // ✅ המרת Decimal ל-Number לפני שליחה
+        // המרת Decimal של Prisma ל-Number
         const balanceToSend =
           typeof result.walletBalance === 'object'
             ? parseFloat(result.walletBalance)
             : result.walletBalance;
 
-        console.log(
-          `📡 Emitting wallet update to user ${userId}:`,
-          balanceToSend
-        );
+        console.log(`Emitting wallet update to user ${userId}:`, balanceToSend);
 
-        // שליחה לחדר האישי של המשתמש
         io.to(userId).emit('wallet:updated', {
           newBalance: balanceToSend,
           timestamp: new Date().toISOString(),
@@ -114,26 +111,20 @@ export const handleWebhook = async (req, res) => {
 
         console.log('✅ Socket event emitted successfully');
       } else {
-        console.warn(
-          '⚠️ Socket.IO instance not found - real-time update skipped'
-        );
+        console.warn('Socket.IO instance not found - real-time update skipped');
       }
 
-      // ========================================
-      // 🔧 תיקון נוסף: תגובה מהירה ל-Stripe
-      // ========================================
       res.status(200).json({
         received: true,
         userId,
         newBalance: result.walletBalance,
       });
     } catch (error) {
-      console.error('❌ WEBHOOK ERROR:', error.message);
+      console.error('WEBHOOK ERROR:', error.message);
       return res.status(500).json({ error: 'Internal processing error' });
     }
   } else {
-    // אירועים אחרים של Stripe
-    console.log(`ℹ️ Unhandled event type: ${event.type}`);
+    console.log(`ℹUnhandled event type: ${event.type}`);
     res.json({ received: true });
   }
 };

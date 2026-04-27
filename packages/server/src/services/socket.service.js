@@ -1,3 +1,17 @@
+/**
+ * socket.service.js (server)
+ *
+ * אתחול שרת Socket.IO וניהול אירועי חיבור/ניתוק.
+ * מטפל בשני תרחישים עיקריים:
+ *   1. חיבור — הצטרפות לחדר פרטי לפי userId (להתראות אישיות)
+ *   2. ניתוק — סגירה אוטומטית של משחקים פעילים כשמארח מתנתק
+ *
+ * מתקשר עם: Prisma → Game, Socket.IO rooms
+ * תלוי ב:   socketAuth (middleware), game.handler.js, game.service.js
+ * משמש את:  server.js (קריאה ל-initializeSocketIO בהפעלה)
+ *
+ * TODO: cors origin: '*' — יש להגביל לדומיין הידוע לפני פרודקשן
+ */
 import { Server } from 'socket.io';
 import { registerGameHandlers } from '../sockets/game.handler.js';
 import { socketAuth } from '../middleware/socketAuth.js';
@@ -20,12 +34,9 @@ export const initializeSocketIO = (httpServer) => {
     const user = socket.user;
     if (user && user.id) {
       socket.join(user.id);
-      console.log(`✅ User ${user.id} joined private room`);
     }
 
-    // כאן אנחנו מחליפים את ה-console.log הפשוט בלוגיקה חכמה
     socket.on('disconnect', async () => {
-      console.log('❌ User disconnected:', socket.id);
       if (user && user.id) {
         try {
           const activeGames = await prisma.game.findMany({
@@ -33,19 +44,14 @@ export const initializeSocketIO = (httpServer) => {
           });
 
           for (const game of activeGames) {
-            console.log(
-              `⚠️ Host ${user.username} disconnected. Closing game ${game.id}`
-            );
-            // אנחנו קוראים לסרוויס - הוא כבר ידאג לעדכן את ה-DB ולשלוח Axios למדיה
             await gameService.updateGameStatus(game.id, user.id, 'FINISHED');
-
             io.to(game.id).emit('game_status_update', {
               gameId: game.id,
               status: 'FINISHED',
             });
           }
-        } catch (err) {
-          console.error('Cleanup on disconnect failed:', err.message);
+        } catch {
+          // כישלון בניקוי לא אמור לפיל את השרת
         }
       }
     });

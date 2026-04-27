@@ -1,3 +1,4 @@
+// ניהול תיבת ההודעות הנכנסות — שליפה עם pagination וסימון כנקרא
 import inboxService from '../services/inbox.service.js';
 
 const inboxController = {

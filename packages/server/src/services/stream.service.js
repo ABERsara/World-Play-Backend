@@ -1,26 +1,38 @@
-// packages/server/src/services/stream.service.js
-
+/**
+ * stream.service.js (server)
+ *
+ * שכבת השירות לניהול שידורים מהשרת הראשי.
+ * אחראי על עדכון סטטוס שידורים ב-DB ועל פרוקסי בקשות לשרת המדיה.
+ *
+ * פונקציות:
+ *   startStream(streamId, inputPipe)           — פרוקסי stream גולמי לשרת המדיה
+ *   updateStreamStatus(streamId, userId, status) — עדכון סטטוס עם מעקב זמן pause
+ *   pauseStream(streamId)                      — השהיית שידור
+ *   resumeStream(streamId)                     — המשך שידור
+ *
+ * מתקשר עם: Prisma → Stream, axios → media-server
+ * תלוי ב:   MEDIA_SERVER_URL (hardcoded — TODO: להעביר ל-ENV)
+ * משמש את:  stream.controller.js, Socket.IO event handlers
+ */
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
-// import { PassThrough } from 'stream';
 
 const prisma = new PrismaClient();
 const MEDIA_SERVER_URL = 'http://media-server:8000';
 
 const streamService = {
   async startStream(streamId, inputPipe) {
-    // יצירת בקשת POST שהיא בעצמה Stream
     try {
       await axios({
         method: 'post',
         url: `${MEDIA_SERVER_URL}/live/start/${streamId}`,
-        data: inputPipe, // הזרמה ישירה של ה-Request המקורי לשרת המדיה
+        data: inputPipe,
         headers: { 'Content-Type': 'application/octet-stream' },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });
     } catch (err) {
-      console.error('Stream pipe failed', err.message);
+      throw new Error(`Stream pipe failed: ${err.message}`);
     }
   },
   async updateStreamStatus(streamId, userId, newStatus) {

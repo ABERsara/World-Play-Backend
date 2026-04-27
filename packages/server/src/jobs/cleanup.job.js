@@ -1,3 +1,4 @@
+// Job יומי (חצות) — מחיקה לוגית אחרי 30 יום ומחיקה פיזית אחרי 31 יום למשחקים ללא pinned
 import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
 

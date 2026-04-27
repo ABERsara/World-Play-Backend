@@ -4,7 +4,6 @@ export const reportAnalytics = async (req, res) => {
     const userId = req.user.id;
     const reportData = req.body;
 
-    // קריאה לפונקציה מהסרביס
     const newLog = await analyticsService.createViewLog(userId, reportData);
 
     res.status(201).json({

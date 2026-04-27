@@ -1,5 +1,5 @@
 import economyService from '../services/economy.service.js';
-import { syncUserBalances } from '../utils/balanceSync.js'; // ייבוא פונקציית הסנכרון
+import { syncUserBalances } from '../utils/balanceSync.js';
 
 const economyController = {
   async sendGift(req, res) {
@@ -15,14 +15,11 @@ const economyController = {
         gameId
       );
 
-      // --- סנכרון Real-time לכל הצדדים ---
+      // סנכרון Real-time לכל הצדדים
       const io = req.app.get('io');
       if (io) {
-        // 1. סנכרון לשולח (הפחתת יתרה)
         await syncUserBalances(io, senderId, gameId);
-        // 2. סנכרון למקבל (תוספת יתרה + עדכון ניקוד 35%)
         await syncUserBalances(io, receiverPlayerId, gameId);
-        // 3. סנכרון למנחה (עמלת 65%)
         await syncUserBalances(io, moderatorId, gameId);
       }
 

@@ -1,3 +1,17 @@
+/**
+ * index.js (server)
+ *
+ * נקודת הכניסה לשרת הראשי — מאתחל Express, Socket.IO, ו-Routes.
+ * מחכה לזמינות שרת המדיה לפני שמסמן שהשרת מוכן.
+ *
+ * Routes:
+ *   /api/users, /api/user-answers, /api/finance, /api/streams
+ *   /api/games, /api/questions, /api/analytics, /api/notifications
+ *   /api/chat, /api/payments, /api/economy, /api/inbox, /api/follows
+ *   /api/config, / (status)
+ *
+ * TODO: cors origin: '*' — יש להגביל לדומיין הידוע לפני פרודקשן
+ */
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
