@@ -1,31 +1,38 @@
+/**
+ * feed.service.js
+ *
+ * שכבת השירות לבניית הפיד האישי של המשתמש.
+ * בונה רשימת שידורים חיים מותאמת אישית מ-3 שכבות:
+ *   1. שידורים של מארחים שהמשתמש עוקב אחריהם
+ *   2. שידורים של מארחים שהמשתמש הראה בהם עניין (ViewLog)
+ *   3. fallback — שידורים פופולריים כלשהם אם הפיד ריק
+ *
+ * מתקשר עם: Prisma → Follow, ViewLog, Stream
+ * תלוי ב:   validation.service.js (קיום משתמש, חוקי התעניינות, מיזוג רשימות)
+ * משמש את:  feed.controller.js
+ */
 import { PrismaClient } from '@prisma/client';
-import * as gameRules from '../services/validation.service.js'; // ודאי שהקובץ הזה קיים בתיקיית services
+import * as gameRules from '../services/validation.service.js';
 
 const prisma = new PrismaClient();
 
 const feedService = {
-  // 2. עוטפים באובייקט כדי לשמור על אחידות
-
   async fetchActiveStreams(userId) {
-    // שלב מקדים: מוודאים שהמשתמש קיים בכלל (מונע קריסות)
     await gameRules.ensureUserExists(userId);
 
-    // שלב א: מזהים אחרי מי המשתמש עוקב
     const following = await prisma.follow.findMany({
       where: { followerId: userId },
       select: { followingId: true },
     });
     const followingIds = following.map((f) => f.followingId);
 
-    // שלב ב: מזהים מארחים שמעניינים את המשתמש
-    // שינוי: לוקחים את החוקים (60 שניות / 20%) מתוך ה-Validation Service
     const interestRules = gameRules.getSignificantInteractionRules();
 
     const interestLogs = await prisma.viewLog.findMany({
       where: {
         userId: userId,
-        hostId: { notIn: followingIds }, // לא כולל את מי שכבר עוקבים אחריו
-        OR: interestRules, // <--- שימוש בחוקים המרכזיים
+        hostId: { notIn: followingIds },
+        OR: interestRules,
       },
       distinct: ['hostId'],
       take: 5,
@@ -34,14 +41,11 @@ const feedService = {
 
     const recommendedHostIds = interestLogs.map((log) => log.hostId);
 
-    // שלב ג: מחברים את שתי הרשימות ומוחקים כפילויות
-    // שינוי: שימוש בפונקציית העזר החדשה שיצרנו
     const targetHostIds = gameRules.mergeUniqueIds(
       followingIds,
       recommendedHostIds
     );
 
-    // שלב ד: שולפים רק את השידורים של האנשים ברשימה
     const liveStreams = await prisma.stream.findMany({
       where: {
         status: 'LIVE',

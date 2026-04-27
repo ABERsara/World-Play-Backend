@@ -1,3 +1,22 @@
+/**
+ * game.service.js
+ *
+ * שכבת השירות המרכזית לניהול משחקים — יצירה, הצטרפות, סטטוס והיסטוריה.
+ * כל שינוי משמעותי (יצירת משחק, עדכון סטטוס) מאומת מול permissions ו-validation לפני הביצוע.
+ *
+ * פונקציות:
+ *   createGame(userId, data)                  — יצירת stream + game + HOST participant בטרנזקציה
+ *   joinGame(gameId, userId, role)            — הצטרפות למשחק עם בדיקת כשירות
+ *   updateGameStatus(gameId, userId, status)  — עדכון סטטוס עם בדיקת הרשאות ומעברים חוקיים
+ *   getFollowedFeed(userId)                   — משחקים פעילים של מארחים שעוקבים אחריהם
+ *   getGameHistory(userId)                    — היסטוריית משחקים עם pinned-first ו-breakdown נקודות
+ *   togglePin(userId, gameId)                 — הצמדת/ביטול הצמדת משחק בהיסטוריה
+ *   getGameViewers(gameId, currentUserId)     — סטטיסטיקת צופים (סה"כ / עוקבים / מזדמנים)
+ *
+ * מתקשר עם: Prisma → Game, Stream, GameParticipant, UserGameActivity, Follow, ViewLog
+ * תלוי ב:   validation.service.js, permissions.service.js
+ * משמש את:  game.controller.js, Socket.IO event handlers
+ */
 import { PrismaClient } from '@prisma/client';
 import permissionsService from './permissions.service.js';
 import * as gameRules from '../services/validation.service.js';
@@ -46,7 +65,6 @@ const gameService = {
         },
       });
 
-      // ✅ רישום פעילות למארח
       await tx.userGameActivity.create({
         data: {
           userId: userId,
@@ -74,7 +92,6 @@ const gameService = {
       data: { gameId, userId, role, score: 0 },
     });
 
-    // ✅ רישום פעילות למשתתף
     await prisma.userGameActivity.upsert({
       where: {
         userId_gameId: { userId, gameId },

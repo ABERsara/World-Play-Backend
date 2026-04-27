@@ -1,3 +1,4 @@
+// נתיבי פיננסים — הוספת כרטיס אשראי ויצירת טרנזקציות, מוגנים ב-auth
 import express from 'express';
 import financeController from '../controller/finance.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';

@@ -1,3 +1,22 @@
+/**
+ * user.service.js
+ *
+ * שכבת השירות לניהול משתמשים — רישום, אימות, ופרופיל.
+ *
+ * פונקציות:
+ *   createUser(name, username, email, password) — רישום משתמש חדש עם hash לסיסמה
+ *   authenticateUser(email, password)           — התחברות + הנפקת JWT
+ *   getUserById(id)                             — שליפת משתמש לפי ID
+ *   getUserProfile(userId)                      — פרופיל מלא (ארנק, נקודות, סטטוס)
+ *   updateUserProfile(userId, updateData)       — עדכון phoneNumber / firebaseId
+ *
+ * מתקשר עם: Prisma → User
+ * תלוי ב:   bcryptjs (hash סיסמה), jsonwebtoken (JWT), validation.service.js
+ * משמש את:  user.controller.js, auth middleware
+ *
+ * TODO: JWT_SECRET — יש לוודא שמוגדר ב-ENV לפני הפעלה (אחרת הטוקן נחתם עם undefined)
+ * TODO: expiresIn '30m' — קצר מאוד, כדאי לשקול refresh token mechanism
+ */
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -8,7 +27,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 const userService = {
   async createUser(name, username, email, plainPassword) {
-    // ולידציות
     validationService.validateNonEmptyText(name, 'Name');
     validationService.validateNonEmptyText(username, 'Username');
     validationService.validateNonEmptyText(plainPassword, 'Password');
@@ -16,7 +34,7 @@ const userService = {
 
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-    const newUser = await prisma.user.create({
+    return await prisma.user.create({
       data: {
         name,
         username,
@@ -26,12 +44,9 @@ const userService = {
       },
       select: { id: true, name: true, username: true, email: true, role: true },
     });
-
-    return newUser;
   },
 
   async authenticateUser(email, plainPassword) {
-    // בדיקת קיום משתמש
     const user = await validationService.ensureUserExistsByEmail(email);
 
     const isPasswordValid = await bcrypt.compare(plainPassword, user.password);
@@ -40,9 +55,9 @@ const userService = {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role }, // ⬅️ שים לב ששיניתי ל-id (לא userId)
+      { id: user.id, email: user.email, role: user.role },
       JWT_SECRET,
-      { expiresIn: '30m' } // ⬅️ שים לב לזמן
+      { expiresIn: '30m' }
     );
 
     return {
@@ -51,7 +66,7 @@ const userService = {
         id: user.id,
         name: user.name,
         username: user.username,
-        email: user.email, // ⬅️ הוספתי email
+        email: user.email,
         role: user.role,
       },
     };
@@ -61,14 +76,6 @@ const userService = {
     return await validationService.ensureUserExists(id);
   },
 
-  // ---------------------------------------------------------
-  // 2. פונקציות פרופיל (החדשות)
-  // ---------------------------------------------------------
-
-  /**
-   * שליפת פרופיל מלא למשתמש (עבור getMe)
-   * 🔥 תוקן: כעת כולל walletBalance ו-isFirstPurchase
-   */
   async getUserProfile(userId) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -76,7 +83,7 @@ const userService = {
         id: true,
         username: true,
         email: true,
-        walletBalance: true, // שימוש בשם השדה הנכון
+        walletBalance: true,
         isFirstPurchase: true,
         isActive: true,
         createdAt: true,
@@ -87,16 +94,13 @@ const userService = {
     return user;
   },
 
-  /**
-   * עדכון פרטי משתמש
-   */
   async updateUserProfile(userId, updateData) {
     await validationService.ensureUserExists(userId);
 
     const { phoneNumber, firebaseId } = updateData;
 
     try {
-      const updatedUser = await prisma.user.update({
+      return await prisma.user.update({
         where: { id: userId },
         data: {
           phoneNumber: phoneNumber || undefined,
@@ -107,11 +111,9 @@ const userService = {
           username: true,
           phoneNumber: true,
           firebaseId: true,
-          walletBalance: true, // ⬅️ גם כאן כדאי להחזיר
+          walletBalance: true,
         },
       });
-
-      return updatedUser;
     } catch (error) {
       if (
         error.code === 'P2002' &&

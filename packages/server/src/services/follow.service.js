@@ -1,5 +1,20 @@
+/**
+ * follow.service.js
+ *
+ * שכבת השירות לניהול מעקבים בין משתמשים.
+ * כל שינוי מעקב מעדכן גם את מוני followers/following ושולח התראה לאינבוקס.
+ *
+ * פונקציות:
+ *   followUser(followerId, followingId)   — יצירת מעקב + עדכון מונים + התראה
+ *   unfollowUser(followerId, followingId) — הסרת מעקב + עדכון מונים
+ *   getMyFollowers(userId)               — רשימת מי שעוקב אחריי
+ *
+ * מתקשר עם: Prisma → Follow, User
+ * תלוי ב:   inbox.service.js (שליחת התראת FOLLOW)
+ * משמש את:  follow.controller.js
+ */
 import { PrismaClient } from '@prisma/client';
-import inboxService from './inbox.service.js'; // ודאי שהנתיב נכון
+import inboxService from './inbox.service.js';
 
 const prisma = new PrismaClient();
 
@@ -44,8 +59,8 @@ const followService = {
           content: `${follow.follower.username} התחיל לעקוב אחריך`,
           metadata: { followerId },
         });
-      } catch (err) {
-        console.error('⚠️ שגיאה ביצירת התראה:', err.message);
+      } catch {
+        // כישלון בהתראה לא אמור לבטל את המעקב עצמו
       }
 
       return follow;

@@ -1,12 +1,23 @@
-// src/services/permissions.service.js
-
+/**
+ * permissions.service.js
+ *
+ * שכבת בדיקות הרשאות למשחק — כל פעולה מוגבלת-תפקיד עוברת דרך כאן.
+ * היררכיית תפקידים: HOST > MODERATOR > PLAYER > VIEWER
+ * HOST מורשה לכל מה שMODERATOR מורשה לו.
+ *
+ * פונקציות:
+ *   validateRole(gameId, userId, requiredRole) — בדיקה גנרית לפי תפקיד, זורקת שגיאה אם נכשל
+ *   ensureHost(gameId, userId)                 — קיצור: דורש תפקיד HOST
+ *   ensureModerator(gameId, userId)            — קיצור: דורש תפקיד MODERATOR או HOST
+ *
+ * מתקשר עם: Prisma → GameParticipant
+ * תלוי ב:   אין תלויות חיצוניות
+ * משמש את:  game.service.js, question.service.js, וכל service שדורש הרשאות
+ */
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const permissionsService = {
-  /**
-   * בדיקה גנרית: האם למשתמש יש תפקיד מסוים במשחק ספציפי?
-   */
   async validateRole(gameId, userId, requiredRole) {
     if (!gameId || !userId) {
       throw new Error(
@@ -41,8 +52,6 @@ const permissionsService = {
 
     return participant;
   },
-
-  // --- קיצורי דרך נוחים ---
 
   async ensureHost(gameId, userId) {
     return this.validateRole(gameId, userId, 'HOST');

@@ -1,3 +1,4 @@
+// יצירת Stripe Payment Sheet לרכישת מטבעות — מוגן ב-auth
 import express from 'express';
 import { createPaymentSheet } from '../payments/payments.service.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';

@@ -1,3 +1,4 @@
+// נתיבי סטרים — יצירה, עדכון סטטוס, הפעלה והשהייה
 import express from 'express';
 import streamController from '../controller/stream.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
@@ -8,14 +9,12 @@ const router = express.Router();
 // אם ה-Media Server בתוך הדוקר, הוא יכול לפנות בלי טוקן בראוט ייעודי
 router.post('/pause', streamController.pauseStream);
 
-// נתיבים מוגנים (דורשים טוקן משתמש)
 router.use(authenticateToken);
 
 router.post('/', streamController.createStream);
 router.put('/:id/status', streamController.updateStatus);
 router.post('/question-pause', streamController.handleQuestionPause);
 
-// packages/server/src/routes/stream.routes.js
 router.post('/:streamId/start', streamController.start);
 
 export default router;

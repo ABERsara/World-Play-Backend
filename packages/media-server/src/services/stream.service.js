@@ -1,3 +1,20 @@
+/**
+ * stream.service.js (media-server)
+ *
+ * מנוע ה-HLS — מנהל תהליכי FFmpeg לכל שידור חי.
+ * מקבל RTP מ-mediasoup, כותב קבצי HLS לדיסק, ומנקה בסיום.
+ *
+ * זרימת עבודה:
+ *   1. startRecording(video) → יוצר state + מחכה 3 שניות לאודיו
+ *   2. startRecording(audio) → מבטל טיימר ומפעיל FFmpeg מיד
+ *   3. stopRecording       → הורג FFmpeg, סוגר consumers, מוחק תיקייה
+ *
+ * מתקשר עם: mediasoup (PlainTransport, Consumer), FFmpeg (child_process), fs (HLS segments)
+ * תלוי ב:   mediasoup.service.js
+ * משמש את:  socket handlers בשרת המדיה
+ *
+ * TODO: port assignment אקראי (Math.random) — עלול לגרום קולוזיות, כדאי מנגנון pool
+ */
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';

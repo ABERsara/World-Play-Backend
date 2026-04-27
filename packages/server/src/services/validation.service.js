@@ -1,3 +1,20 @@
+/**
+ * validation.service.js
+ *
+ * שירות הולידציה המרכזי של האפליקציה — כמעט כל שירות אחר תלוי בו.
+ * מחולק לארבעה אזורים:
+ *   1. בדיקות קיום    — ensureXxxExists (זורקות שגיאה אם הרשומה לא נמצאת)
+ *   2. בדיקות סטטוס   — validateXxx (זורקות שגיאה אם הסטטוס לא מתאים)
+ *   3. ולידציות מורכבות — validateJoinEligibility, ensureQuestionIsBetable
+ *   4. עזרים          — validateNonEmptyText, mergeUniqueIds, getSignificantInteractionRules
+ *
+ * מיוצא גם כ-named exports וגם כ-default object —
+ * שירותים שמשתמשים ב-import * as gameRules יקבלו את ה-named exports.
+ *
+ * מתקשר עם: Prisma → Game, Stream, User, Notification, GameParticipant, Question
+ * תלוי ב:   אין תלויות חיצוניות
+ * משמש את:  כל שירותי השרת
+ */
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -74,7 +91,6 @@ export const validateStreamIsFree = async (streamId) => {
   }
 };
 
-// הפונקציה שגרמה לשגיאה - עכשיו היא מיוצאת כראוי
 export const validateUserHasNoActiveStream = async (userId) => {
   const activeStream = await prisma.stream.findFirst({
     where: {
@@ -113,7 +129,7 @@ export const validateJoinEligibility = async (
   userId,
   requestedRole
 ) => {
-  const game = await ensureGameExists(gameId); // קריאה ישירה לפונקציה (בלי this)
+  const game = await ensureGameExists(gameId);
 
   if (game.status === 'FINISHED')
     throw new Error('Cannot join a finished game');
@@ -174,20 +190,31 @@ export const ensureQuestionIsBetable = async (questionId) => {
 
 export const validateUserFunds = (user, amount) => {
   if (Number(user.walletBalance) < amount) {
-    throw new Error('אין מספיק מטבעות בארנק לביצוע ההימור [cite: 1, 46]');
+    throw new Error('אין מספיק מטבעות בארנק לביצוע ההימור');
   }
+};
+
+export const validateNonEmptyText = (text, fieldName = 'Field') => {
+  if (!text?.trim()) throw new Error(`${fieldName} cannot be empty`);
 };
 export default {
   ensureGameExists,
   ensureStreamExists,
   ensureUserExists,
   ensureUserExistsByEmail,
+  ensureNotificationExists,
   validateEmailIsUnique,
   validateUserHasNoActiveStream,
   validateStreamIsFree,
+  validateGameIsActive,
+  validateStatusTransition,
+  validateHostIsAvailable,
   validateJoinEligibility,
   validateQuestionData,
   ensureChatParticipantsExist,
+  ensureQuestionIsBetable,
+  validateUserFunds,
+  validateNonEmptyText,
   getSignificantInteractionRules,
   mergeUniqueIds,
 };

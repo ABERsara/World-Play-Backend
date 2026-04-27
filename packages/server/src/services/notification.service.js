@@ -1,42 +1,49 @@
+/**
+ * notification.service.js
+ *
+ * שכבת השירות לניהול התראות מערכת למשתמשים.
+ * מטפל ביצירה, שליפה וסימון קריאה של התראות.
+ *
+ * פונקציות:
+ *   fetchUserNotifications(userId, filter)          — שליפת התראות + ספירת לא-נקראות (filter: 'unread' | undefined)
+ *   updateNotificationReadStatus(notificationId)    — סימון התראה כנקראה
+ *   createNewNotification(userId, type, content)    — יצירת התראה חדשה ('SYSTEM' | 'GAME_INVITE' | 'REWARD')
+ *
+ * מתקשר עם: Prisma → Notification
+ * תלוי ב:   validation.service.js (קיום משתמש, קיום התראה, ולידציית טקסט)
+ * משמש את:  notification.controller.js
+ *
+ * TODO: updateNotificationReadStatus צריך לקבל userId ולוודא בעלות לפני עדכון
+ */
 import { PrismaClient } from '@prisma/client';
 import * as gameRules from '../services/validation.service.js';
 
 const prisma = new PrismaClient();
 
 const notificationService = {
-  /**
-   * שליפת התראות למשתמש (עם אופציה לסינון)
-   */
   async fetchUserNotifications(userId, filter) {
-    // 1. ולידציה: האם המשתמש קיים?
     await gameRules.ensureUserExists(userId);
 
-    const whereCondition = {
-      userId: userId,
-    };
-
+    const whereCondition = { userId };
     if (filter === 'unread') {
       whereCondition.isRead = false;
     }
 
-    const notifications = await prisma.notification.findMany({
-      where: whereCondition,
-      orderBy: { sendDate: 'desc' },
-      take: 20,
-    });
-
-    const unreadCount = await prisma.notification.count({
-      where: { userId: userId, isRead: false },
-    });
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where: whereCondition,
+        orderBy: { sendDate: 'desc' },
+        take: 20,
+      }),
+      prisma.notification.count({
+        where: { userId, isRead: false },
+      }),
+    ]);
 
     return { notifications, unreadCount };
   },
 
-  /**
-   * סימון התראה כ"נקראה"
-   */
   async updateNotificationReadStatus(notificationId) {
-    // 1. ולידציה: האם ההתראה קיימת?
     await gameRules.ensureNotificationExists(notificationId);
 
     return await prisma.notification.update({
@@ -48,20 +55,14 @@ const notificationService = {
     });
   },
 
-  /**
-   * יצירת התראה חדשה
-   */
   async createNewNotification(userId, type, content) {
-    // 1. ולידציה: האם המשתמש קיים?
     await gameRules.ensureUserExists(userId);
-
-    // 2. ולידציה: האם התוכן תקין? (שימוש בפונקציה הקיימת)
     gameRules.validateNonEmptyText(content, 'Notification content');
 
     return await prisma.notification.create({
       data: {
         userId,
-        type, // 'SYSTEM', 'GAME_INVITE', 'REWARD'
+        type,
         content,
         isRead: false,
       },

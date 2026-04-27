@@ -1,3 +1,22 @@
+/**
+ * inbox.service.js
+ *
+ * שכבת השירות לניהול תיבת הדואר הנכנס של המשתמש.
+ * מאחד שלושה סוגי פריטים לתצוגה אחת ממוינת:
+ *   FOLLOW              — מעקבים חדשים (מטבלת Follow)
+ *   GIFT                — מתנות שהתקבלו (מטבלת Transaction)
+ *   SYSTEM_NOTIFICATION — התראות מערכת (מטבלת Notification)
+ *
+ * פונקציות:
+ *   getMyInbox(userId, page, limit)       — שליפת פריטים ממוינים עם פגינציה
+ *   normalizeInboxData(userId, items)     — נירמול פריטים לפורמט אחיד
+ *   markItemAsRead(id, type, userId)      — סימון פריט כנקרא (לפי סוג)
+ *   createNotification(userId, data)      — יצירת התראת מערכת (נקרא מ-follow.service)
+ *
+ * מתקשר עם: Prisma → Follow, Transaction, Notification
+ * תלוי ב:   validation.service.js (קיום משתמש)
+ * משמש את:  inbox.controller.js, follow.service.js
+ */
 import { PrismaClient } from '@prisma/client';
 import * as gameRules from './validation.service.js';
 
@@ -162,6 +181,18 @@ const inboxService = {
     }
 
     return { success: true };
+  },
+
+  async createNotification(userId, { title, content, metadata = {} }) {
+    return await prisma.notification.create({
+      data: {
+        userId,
+        title,
+        message: content,
+        isRead: false,
+        metadata,
+      },
+    });
   },
 };
 

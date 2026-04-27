@@ -1,4 +1,13 @@
-// chat.service.js
+/**
+ * chat.service.js
+ *
+ * שכבת השירות לניהול צ'אט בין משתמשים.
+ * מטפל בשליפת היסטוריית הודעות ויצירת הודעות חדשות.
+ *
+ * מתקשר עם: Prisma → טבלת ChatMessage בבסיס הנתונים
+ * תלוי ב:   validation.service.js (בדיקת קיום משתמשים + ולידציית טקסט)
+ * משמש את:  chat.controller.js, Socket.IO event handlers
+ */
 import { PrismaClient } from '@prisma/client';
 import * as gameRules from '../services/validation.service.js';
 const prisma = new PrismaClient();

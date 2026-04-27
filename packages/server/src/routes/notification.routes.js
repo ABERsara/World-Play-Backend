@@ -1,3 +1,4 @@
+// נתיבי התראות — שליפה, סימון כנקרא ויצירה ידנית לבדיקות
 import { Router } from 'express';
 import {
   createTestNotification,
@@ -7,13 +8,8 @@ import {
 
 const router = Router();
 
-// GET /api/notifications?userId=...
 router.get('/', getMyNotifications);
-
-// PUT /api/notifications/:notificationId/read
 router.put('/:notificationId/read', markAsRead);
-
-// --- הוספנו את השורה הזו לבדיקה ---
 router.post('/create', createTestNotification);
 
 export default router;

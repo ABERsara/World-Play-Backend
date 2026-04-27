@@ -1,6 +1,19 @@
-// src/services/economy.service.js
-// ✅ תיקון: שימוש ב-upsert במקום update ל-gameParticipant (מונע שגיאת "Record not found")
-
+/**
+ * economy.service.js
+ *
+ * שכבת השירות לניהול הכלכלה במשחק — כל תנועת כסף עוברת דרך כאן.
+ * כל פעולה כספית מוגנת בתוך $transaction של Prisma כדי למנוע אי-התאמות.
+ *
+ * פונקציות:
+ *   distributeStandardPot  — חלוקת קופה רגילה בין שחקנים + מנחה
+ *   processWinnerPayout    — תשלום ל"מי ינצח" (85% לזוכה, 15% למנחה)
+ *   rewardCorrectAnswer    — פרס לתשובה נכונה (125% מההימור)
+ *   sendGift               — שליחת מתנה (35% לשחקן, 65% למנחה)
+ *
+ * מתקשר עם: Prisma → User, GameParticipant, UserAnswer, QuestionOption, Transaction, Game
+ * תלוי ב:   אין תלויות חיצוניות מעבר ל-Prisma
+ * משמש את:  question.service.js, game.controller.js, Socket.IO event handlers
+ */
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
