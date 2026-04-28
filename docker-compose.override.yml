@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app-server:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    
+  media-server:
+    build:
+      context: .
+      dockerfile: packages/media-server/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./packages/media-server/public/streams:/usr/src/app/packages/media-server/public/streams
+    env_file: .env
+    ports:
+      - "8000:8000"
+      - "10000-10010:10000-10010/udp"
+      - "11000-11020:11000-11020/udp" 
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ANNOUNCED_IP=${ANNOUNCED_IP}
+      - RTC_MIN_PORT=10000       # חשוב: אומר למדיה סרבר להשתמש בטווח הזה
+      - RTC_MAX_PORT=10010
+
+volumes:
+  postgres_data:

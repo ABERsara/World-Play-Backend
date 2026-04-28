@@ -13,7 +13,7 @@ router.use((req, res, next) => {
 router.get('/', (req, res) => {
   res.json({
     status: 'online',
-    message: '🚀 World-Play Media Server is Live and Running!',
+    message: '🚀 HyPulse Media Server is Live and Running!',
     timestamp: new Date().toISOString(),
   });
 });

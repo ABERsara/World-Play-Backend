@@ -5,7 +5,7 @@ const router = express.Router();
 router.get('/', (req, res) => {
   res.json({
     status: 'online',
-    message: '🎮 World-Play MAIN API is Running!',
+    message: '🎮 HyPulse MAIN API is Running!',
     timestamp: new Date().toISOString(),
   });
 });
