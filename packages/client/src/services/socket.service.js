@@ -13,22 +13,15 @@
  */
 import { io } from 'socket.io-client';
 import { authService } from './auth.service';
-import { Platform } from 'react-native';
 
-const APP_SERVER_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+const APP_SERVER_URL = process.env.EXPO_PUBLIC_API_URL;
 
 let appSocketInstance = null;
 let mediaSocketInstance = null;
 let mediaSocketConnectPromise = null;
 
 const getMediaServerUrl = () => {
-  const envUrl = process.env.EXPO_PUBLIC_MEDIA_SERVER_URL;
-
-  if (Platform.OS === 'android') {
-    return envUrl || 'http://10.0.2.2:8000';
-  }
-  return 'http://localhost:8000';
+  return process.env.EXPO_PUBLIC_MEDIA_SERVER_URL;
 };
 
 export const connectAppSocket = async () => {
