@@ -38,6 +38,9 @@ Thumbs.db
 # Local scripts
 test.sh
 
+# Postman
+postman/
+
 # Media files
 *.mp4
 packages/media-server/*.mp4

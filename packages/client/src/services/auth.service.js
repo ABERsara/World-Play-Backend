@@ -9,8 +9,10 @@
  * משמש את:  AuthContext ומסך ההתחברות
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-const API_URL = 'http://10.0.2.2:8080/api/users';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
+const API_URL = `${BASE_URL}/api/users`;
 
 export const authService = {
   login: async (email, password) => {
