@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authService } from '../../services/auth.service';
 
-const BASE_URL = 'http://10.0.2.2:8080/api';
+const BASE_URL = `${process.env.EXPO_PUBLIC_API_URL}/api`;
 
 export const fetchInbox = createAsyncThunk(
   'inbox/fetchInbox',

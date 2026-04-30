@@ -28,7 +28,7 @@ const gameStreamSlice = createSlice({
       state.viewMode = role === 'VIEWER' ? 'HLS' : 'WebRTC';
 
       if (state.viewMode === 'HLS') {
-        state.hlsUrl = `http://localhost:8000/streams/${streamId}/index.m3u8`;
+        state.hlsUrl = `${process.env.EXPO_PUBLIC_MEDIA_SERVER_URL}/streams/${streamId}/index.m3u8`;
       }
     },
 

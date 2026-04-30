@@ -35,9 +35,12 @@ const ShopScreen = ({ userId, onLogout }) => {
         return;
       }
 
-      const response = await fetch('http://10.0.2.2:8080/api/users/profile', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/api/users/profile`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       if (response.status === 401 || response.status === 403) {
         await authService.logout();
@@ -77,7 +80,7 @@ const ShopScreen = ({ userId, onLogout }) => {
     try {
       const token = await authService.getToken();
       const response = await fetch(
-        'http://10.0.2.2:8080/api/payments/create-sheet',
+        `${process.env.EXPO_PUBLIC_API_URL}/api/payments/create-sheet`,
         {
           method: 'POST',
           headers: {
@@ -125,7 +128,7 @@ const ShopScreen = ({ userId, onLogout }) => {
     try {
       const token = await authService.getToken();
       const response = await fetch(
-        'http://10.0.2.2:8080/api/user-answers/submit',
+        `${process.env.EXPO_PUBLIC_API_URL}/api/user-answers/submit`,
         {
           method: 'POST',
           headers: {

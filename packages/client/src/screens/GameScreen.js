@@ -15,7 +15,7 @@ import { socket } from '../services/socket.service';
 import { updateBalances } from '../store/slices/walletSlice';
 import { authService } from '../services/auth.service';
 
-const BASE_URL = 'http://10.0.2.2:8080/api';
+const BASE_URL = `${process.env.EXPO_PUBLIC_API_URL}/api`;
 
 const getAuthHeaders = async () => {
   const token = await authService.getToken();
